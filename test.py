@@ -1,18 +1,37 @@
+
 import curses
 
-stdscr = curses.initscr()
+class layout:
+    def generate_output_array(self):
+        output_array = [[]]
+        line = 0
 
-pad = curses.newpad(100, 100)
-# These loops fill the pad with letters; addch() is
-# explained in the next section
-for y in range(0, 99):
-    for x in range(0, 99):
-        pad.addch(y,x, ord('a') + (x*x+y*y) % 26)
+        for char in self.source_text:
+            if char == "\n":
+                output_array.push([])
+                line += 1
+            else:
+                output_array[line].push(char)
 
-# Displays a section of the pad in the middle of the screen.
-# (0,0) : coordinate of upper-left corner of pad area to display.
-# (5,5) : coordinate of upper-left corner of window area to be filled
-#         with pad content.
-# (20, 75) : coordinate of lower-right corner of window area to be
-#          : filled with pad content.
-pad.refresh( 0,0, 5,5, 20,75)
+        return output_array
+
+    def __init__(self, text):
+        self.source_text = text
+        self.source_array = self.generate_output_array(self)
+    
+    def __str__(self):
+        for line in self.source_array:
+            line_print = ""
+
+            for char in line:
+                line_print += char + " "
+            
+            print(line_print)
+        print("layout_printed")
+
+def main(stdscr):
+    my_layout = layout("""abc
+def
+ghi
+""")
+    print(my_layout)

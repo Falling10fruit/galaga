@@ -4,7 +4,7 @@ import curses
 
 stdscr = curses.initscr()
 
-print(curses.LINES)
+print(f"There are {curses.LINES} lines")
 
 class vec2:
     def __init__(self, x, y):
@@ -136,14 +136,17 @@ class Starfighter(Entity):
 
 def render(stdscr):
     stdscr.clear()
-    for entity in render_buffer:
-        top_left = entity.position
-        entity_dimensions = entity.texture_dimensions
-        offset = entity_dimensions.divide(2)
-        top_left.substr(offset).to_int()
 
-        entity_int_dimensions = entity_dimensions.calc_to_int()
-        entity.texture_pad.refresh(0, 0, top_left.y, top_left.x, top_left.y + entity_int_dimensions.y, top_left.x + entity_int_dimensions.x)
+    render_buffer[0].texture_pad.refresh(0, 0, 0, 0, 7, 2)
+
+    # for entity in render_buffer:
+    #     top_left = entity.position
+    #     entity_dimensions = entity.texture_dimensions
+    #     offset = entity_dimensions.divide(2)
+    #     top_left.substr(offset).to_int()
+
+    #     entity_int_dimensions = entity_dimensions.calc_to_int()
+    #     entity.texture_pad.refresh(0, 0, top_left.y, top_left.x, top_left.y + entity_int_dimensions.y, top_left.x + entity_int_dimensions.x)
 
 def main(stdscr):
     stdscr.clear()
@@ -151,6 +154,8 @@ def main(stdscr):
     curses.cbreak()
 
     player = Starfighter(20, 20)
+
+    print(render_buffer)
     
     while True:
         render(stdscr)
