@@ -2,36 +2,31 @@
 import curses
 
 class layout:
-    def generate_output_array(self):
-        output_array = [[]]
-        line = 0
-
-        for char in self.source_text:
-            if char == "\n":
-                output_array.push([])
-                line += 1
-            else:
-                output_array[line].push(char)
-
-        return output_array
-
     def __init__(self, text):
         self.source_text = text
-        self.source_array = self.generate_output_array(self)
+        self.source_array = text.split("\n")
     
     def __str__(self):
-        for line in self.source_array:
-            line_print = ""
+        output_string = ""
 
-            for char in line:
-                line_print += char + " "
-            
-            print(line_print)
-        print("layout_printed")
+        for line in self.source_array:
+            output_string += line + "\n"
+
+        return output_string
+
+    def draw_at(self, stdscr, line_pos, column_pos):
+        for index in range(len(self.source_array)):
+            stdscr.addstr(line_pos + index, column_pos, self.source_array[index])
 
 def main(stdscr):
+    stdscr.clear()
+    
     my_layout = layout("""abc
 def
-ghi
-""")
-    print(my_layout)
+ghi""")
+    
+    my_layout.draw_at(stdscr, 10, 10)
+    stdscr.refresh()
+    stdscr.getkey()
+
+curses.wrapper(main)
