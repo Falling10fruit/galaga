@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+    <body>
+        <p id="mouse_pos"></p>
+        <button id="copy_path">Copy path data</button>
+
+        <script>
+            const mouse_pos = document.getElementById("mouse_pos");
+            let is_recording = false;
+            let path = []
+
+            window.onkeypress = (e) => {
+                console.log(e.key)
+
+                if (e.key == ' ') is_recording = !is_recording;
+                if (is_recording) path = []
+            }
+
+            window.onmousemove = (e) => {
+                let recording_text = "NOT RECORDING"
+                if (is_recording) {
+                    recording_text = "NOW RECORDING";
+
+                    path.push(`vec2(${e.clientX/window.innerWidth}, ${e.clientY/window.innerHeight})`);
+                }
+
+                mouse_pos.innerText = `x: ${e.clientX/window.innerWidth} y: ${e.clientY/window.innerHeight} ${recording_text}`
+            }
+
+            document.getElementById("copy_path").onclick = () => { navigator.clipboard.writeText(JSON.stringify(path)) };
+        </script>
+    </body>
+</html>
