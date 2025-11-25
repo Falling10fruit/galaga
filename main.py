@@ -1,4 +1,5 @@
-import simpleaudio
+import pyaudio
+import numpy
 import math
 import time
 import curses
@@ -6,7 +7,13 @@ import pynput
 from enum import Enum
 import random
 import string   
-import simpleaudio
+import pyaudio
+import soundfile
+import numpy
+import sys
+import signal
+
+# 100% ChatGPT made. Everything
 
 stdscr = curses.initscr()
 
@@ -656,9 +663,70 @@ def stage_controller():
     #     pass
 
 
-gameplay_song = simpleaudio.WaveObject.from_wave_file('Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.wav')
-welcome_song = simpleaudio.WaveObject.from_wave_file('mendelssohn\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_Italian_-_III._Con_moto_moderato_(Musopen_Symphony).wav')
-play_welcome_song = welcome_song.play()
+# gameplay_song = simpleaudio.WaveObject.from_wave_file('Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.wav')
+# welcome_song = simpleaudio.WaveObject.from_wave_file('mendelssohn\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_Italian_-_III._Con_moto_moderato_(Musopen_Symphony).wav')
+# play_welcome_song = welcome_song.play()
+
+audio = pyaudio.PyAudio()
+
+class Song:
+    audio_chunk = 512
+    chunk_index = 0
+
+    def __init__(self, path):
+        self.file = soundfile.SoundFile(path, 'r')
+        self.init_stream()
+
+    def stream_callback(self, in_data, frame_count, time_info, status_flags):
+        global audio
+
+        data = self.file.read(frame_count, dtype='float32')
+        
+        if len(data) < frame_count:
+            self.file.seek(0)
+            data = numpy.concatenate([data, self.file.read(frame_count - len(data), dtype = 'float32')])
+
+        return (data.tobytes(), pyaudio.paContinue)
+
+    def init_stream(self):
+        global audio
+
+        self.stream = audio.open(
+            format = pyaudio.paFloat32,
+            channels = self.file.channels,
+            rate = self.file.samplerate,
+            output = True,
+            stream_callback = self.stream_callback
+        )
+
+        self.stream.stop_stream()
+
+song_list = [
+    # welcome_song
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg"),
+    # first_life_song
+    Song("music\Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg"),
+]
+# second_life_song =() i forgot which one i wanted, i'll remember later
+
+song_indicies = {
+    "welcome": 0,
+    "first_life": 1,
+    "second_life": 2,
+    "third_life": 3,
+    "game_over": 4
+}
+
+current_song = song_indicies['welcome']
+
+def play_song(next_song):
+    global current_song
+
+    song_list[current_song].stream.stop_stream()
+    current_song = next_song
+    song_list[current_song].stream.start_stream()
+
+play_song(song_indicies['welcome'])
 
 def tick(stdscr):
     global current_scene
@@ -705,8 +773,8 @@ def tick(stdscr):
         if key_just_down["space"]:
             stage_start_time = time.time()
             current_scene = Scene.PLAY
-            # play_welcome_song.stop()
-            gameplay_song.play()
+            
+            play_song(song_indicies['first_life'])
     
     release_key_just_down()
 
@@ -824,6 +892,7 @@ def render(stdscr):
 
     stdscr.refresh()
 
+
 def main(stdscr):
     stdscr.clear()
     curses.noecho()
@@ -837,3 +906,14 @@ def main(stdscr):
         time.sleep(0.016667)
 
 curses.wrapper(main)
+
+def ctrlC_handler(signum, frame):
+    global audio
+    for the_song_to_kill in song_list:
+        the_song_to_kill.stream.stop_stream()
+        the_song_to_kill.stream.close()
+    audio.terminate()
+
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, ctrlC_handler)
