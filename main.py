@@ -17,36 +17,6 @@ import signal
 
 stdscr = curses.initscr()
 
-class layout:
-    def __init__(self, text):
-        self.source_text = text
-        self.source_array = text.split("\n")
-        self.layer_visibility = [True] * len(self.source_array)
-    
-    def __str__(self):
-        output_string = ""
-
-        for line in self.source_array:
-            output_string += line + "\n"
-
-        return output_string
-
-    def draw_at(self, stdscr, line_pos, column_pos):
-        for index in range(len(self.source_array)):
-            layer = self.source_array[index]
-            if ((line_pos + index) < 0) or ((line_pos + index) >= curses.LINES) or (column_pos >= curses.COLS) or (column_pos <= -len(layer)) or not self.layer_visibility[index]:
-                continue
-
-            start_column = min(len(layer), max(0, -column_pos))
-            end_column = max(0, min(curses.COLS - column_pos, len(layer)))
-            # print(f"start: {start_column} end: {end_column}")
-
-            # if len(layer) > 16:
-            #     global debug_message
-            #     debug_message = f"curses COLS {curses.COLS} end_column {end_column} column pos {column_pos}"
-
-            stdscr.addstr(line_pos + index, column_pos + start_column, layer[start_column:end_column])
-
 class vec2:
     def __init__(self, x, y):
         self.x = x
@@ -122,6 +92,40 @@ class vec2:
     
     def length(self):
         return math.sqrt(self.x*self.x + self.y*self.y)
+
+class layout:
+    def __init__(self, text):
+        self.source_text = text
+        self.source_array = text.split("\n")
+        self.dimensions = vec2(len(self.source_array[0]), len.source_array)
+        self.layer_visibility = [True] * self.dimensions.y
+    
+    def __str__(self):
+        output_string = ""
+
+        for line in self.source_array:
+            output_string += line + "\n"
+
+        return output_string
+
+    def draw_at(self, stdscr, line_pos, column_pos):
+        for index in range(len(self.source_array)):
+            layer = self.source_array[index]
+            if ((line_pos + index) < 0) or ((line_pos + index) >= curses.LINES) or (column_pos >= curses.COLS) or (column_pos <= -len(layer)) or not self.layer_visibility[index]:
+                continue
+
+            start_column = min(len(layer), max(0, -column_pos))
+            end_column = max(0, min(curses.COLS - column_pos, len(layer)))
+            # print(f"start: {start_column} end: {end_column}")
+
+            # if len(layer) > 16:
+            #     global debug_message
+            #     debug_message = f"curses COLS {curses.COLS} end_column {end_column} column pos {column_pos}"
+
+            stdscr.addstr(line_pos + index, column_pos + start_column, layer[start_column:end_column])
+    
+    def set_visibility(self, is_visible):
+        self.layer_visibility = [is_visible] * self.dimensions.y
 
 entity_buffer = []
 
@@ -329,44 +333,49 @@ key_down = {
     "down": False,
     "left": False,
     "right": False,
-    "space": False
+    "space": False,
+    "p": False
 }
 key_just_down = {
-    "space": False
+    "up": False,
+    "down": False,
+    "left": False,
+    "right": False,
+    "space": False,
+    "p": False
 }
 last_keydown = False
 last_go_right = False
+key_just_down_buffer = []
 
 def handle_keydown(key, is_injected):
     global key_down
     global last_keydown
+    global debug_message
 
-    last_keydown = key
+    last_keydown = key.name
+    # debug_message = f"key down {last_keydown}"
 
-    if (key == pynput.keyboard.Key.up):
-        key_down['up'] = True 
-    if (key == pynput.keyboard.Key.down):
-        key_down['down'] = True 
-    if (key == pynput.keyboard.Key.left):
-        key_down['left'] = True 
-    if (key == pynput.keyboard.Key.right):
-        key_down['right'] = True 
-    if (key == pynput.keyboard.Key.space):
-        if not key_down['space']:
-            key_just_down['space'] = True 
-        key_down['space'] = True
+    if not key_down[last_keydown]:
+        key_just_down_buffer.append(last_keydown)
+        # key_just_down[last_keydown] = True
+    key_down[last_keydown] = True
+
+def buffer_key_just_down():
+    global key_just_down_buffer
+    for key in key_just_down_buffer:
+        key_just_down[key] = True
+    key_just_down_buffer = []
+
+def release_key_just_down():
+    global debug_message
+    # debug_message = f"is up just down {key_just_down['up']}"
+
+    for key in key_just_down.keys():
+        key_just_down[key] = False
 
 def handle_keyup(key, is_rejected):
-    if (key == pynput.keyboard.Key.up):
-        key_down['up'] = False 
-    if (key == pynput.keyboard.Key.down):
-        key_down['down'] = False 
-    if (key == pynput.keyboard.Key.left):
-        key_down['left'] = False 
-    if (key == pynput.keyboard.Key.right):
-        key_down['right'] = False 
-    if (key == pynput.keyboard.Key.space):
-        key_down['space'] = False
+    key_down[key.name] = False
 
 keystroke_handler = pynput.keyboard.Listener(
     on_press=handle_keydown,
@@ -375,17 +384,22 @@ keystroke_handler = pynput.keyboard.Listener(
 keystroke_handler.start()
 
 player = Starfighter(curses.COLS // 2 - 1, curses.LINES - 8)
-player.identification = "ws0k3"
+player.identification = "single"
 
+two_player_1 = Starfighter(curses.COLS // 2 - 1, curses.LINES - 8)
+two_player_1.identification = "double_1"
+two_player_1.layout.set_visibility(False)
+two_player_1.bulletproof = True
+
+two_player_2 = Starfighter(curses.COLS // 2 - 1, curses.LINES - 8)
+two_player_2.identification = "double_2"
+two_player_2.layout.set_visibility(False)
+two_player_2.bulletproof = True
 
 class Scene(Enum):
     START = "start scene"
     PLAY = "play scene"
 current_scene = Scene.START
-
-def release_key_just_down():
-    for key in key_just_down.keys():
-        key_just_down[key] = False
 
 def handle_player():
     global player
@@ -396,7 +410,6 @@ def handle_player():
         player.layout.layer_visibility[0] = False
         player.layout.layer_visibility[1] = False
         player.layout.layer_visibility[2] = False
-
 
 recoil = 0
 def control_player():
@@ -413,10 +426,9 @@ def control_player():
     if key_down['left']:
         player.position.x -= player_speed.x
         
-        
     if recoil > 0:
         recoil -= 1
-    elif key_just_down["space"]:
+    elif key_just_down['up']:
         x_pos = player.position.x + 0.5
         y_pos = round(player.position.y - 1)
  
@@ -432,9 +444,11 @@ def simulate_bullet(bullet):
 
     hit = False
     for enemy in entity_buffer:
-        if enemy.identification == "ws0k3" and bullet.identification == "b214":
+        enemy_is_player = enemy.identification == "single" or enemy.identification == "double_1" or enemy.identification == "double_2"
+
+        if enemy_is_player and bullet.identification == "b214":
             continue
-        if enemy.identification != "ws0k3" and bullet.identification != "b214":
+        if not enemy_is_player and bullet.identification != "b214":
             continue
         if enemy.identification == bullet.identification: # we can't use pointing up because it's not guaranteed to be a property
             continue
@@ -443,7 +457,7 @@ def simulate_bullet(bullet):
             hit = True
             enemy.health -= 1
             
-            # debug_message = f"bullet {bullet.identification} hit enemy {enemy.identification}"
+            debug_message = f"bullet {bullet.identification} hit {enemy.identification}"
             # debug_message = f"{enemy.identification == "ws0k3" and bullet.identification == "b124"}"
 
     if bullet.position.y < 0 or bullet.position.y > curses.LINES or hit:
@@ -467,7 +481,7 @@ if six_inaccuracy == chosen_inaccuracy:
 if five_inaccuracy == chosen_inaccuracy:
     spacing = 5
 
-debug_message = f"chosen spacing {spacing} number of minions to dance {math.floor((curses.COLS + 10)%spacing - 5)}"
+# debug_message = f"chosen spacing {spacing} number of minions to dance {math.floor((curses.COLS + 10)%spacing - 5)}"
 
 for i in range(math.floor((curses.COLS + 10)/spacing)):
     new_minion = Minion()
@@ -668,13 +682,15 @@ def stage_controller():
 # play_welcome_song = welcome_song.play()
 
 audio = pyaudio.PyAudio()
+master_volume = 0.5
 
 class Song:
-    audio_chunk = 512
+    audio_chunk = 2048*2048 # i cannot hear nor feel the difference. plus the documentation says that a big number leads to big performance (lower overhead)
     chunk_index = 0
 
-    def __init__(self, path):
+    def __init__(self, path, volume_weight):
         self.file = soundfile.SoundFile(path, 'r')
+        self.volume_weight = volume_weight
         self.init_stream()
 
     def stream_callback(self, in_data, frame_count, time_info, status_flags):
@@ -686,7 +702,10 @@ class Song:
             self.file.seek(0)
             data = numpy.concatenate([data, self.file.read(frame_count - len(data), dtype = 'float32')])
 
-        return (data.tobytes(), pyaudio.paContinue)
+        global master_volume
+        data *= master_volume
+
+        return ((data * self.volume_weight).tobytes(), pyaudio.paContinue)
 
     def init_stream(self):
         global audio
@@ -701,11 +720,13 @@ class Song:
 
         self.stream.stop_stream()
 
-song_list = [
-    # welcome_song
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg"),
-    # first_life_song
-    Song("music\Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg"),
+song_list = [ # filenames fresh from the archives of wikipedia
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg", 3), # welcome
+    Song("music\Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg", 2),                                                          # first life
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_I._Allegro_vivace_(Musopen_Symphony).ogg", 3),      # second life
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_IV._Saltarello._Presto_(Musopen_Symphony).ogg", 3), # third life
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_II._Andante_con_moto_(Musopen_Symphony).ogg", 3),   # game over
+    Song("music\Bizet_-_Carmen_Suite_No._1_VI._Les_Toréadors.ogg", 3)                                                           # you win
 ]
 # second_life_song =() i forgot which one i wanted, i'll remember later
 
@@ -714,7 +735,8 @@ song_indicies = {
     "first_life": 1,
     "second_life": 2,
     "third_life": 3,
-    "game_over": 4
+    "game_over": 4,
+    "you_win": 5
 }
 
 current_song = song_indicies['welcome']
@@ -728,14 +750,134 @@ def play_song(next_song):
 
 play_song(song_indicies['welcome'])
 
+paused = False
+
+class Menus(Enum):
+    WELCOME = "welcome"
+    SETTINGS = "settings"
+    PAUSED = "paused"
+    HIDDEN = "hidden"
+
+menu_data = {
+    "options": {
+        "hidden": {
+            "option_indicies": {},
+            "option_text": {},
+            "option_list": []
+        },
+        "welcome": {
+            "option_indicies": {
+                "single_player": 0,
+                "double_player": 1,
+                "settings": 2,
+                "exit_game": 3,
+            },
+            "option_text": {
+                "single_player": "ONE PLAYER",
+                "double_player": "TWO PLAYER",
+                "settings": "ADJUST SETTINGS",
+                "exit_game": "EXIT"
+            },
+            "option_list": [
+                "single_player",
+                "double_player",
+                "settings",
+                "exit_game"
+            ],
+        },
+        "settings": {
+            "option_indicies": {
+                "back_to_start": 0,
+                "volume": 1,
+                "ko_wilbert": 2
+            },
+            "option_text": {
+                "back_to_start": "BACK TO START",
+                "volume": "MASTER VOLUME",
+                "ko_wilbert": "INVINCIBILITY"
+            },
+            "option_indicies": [
+                "back_to_start",
+                "volume",
+                "ko_wilbert"
+            ],
+        },
+        "paused": {
+            "option_indicies": {
+                "resume": 0,
+                "settings": 1,
+                "quit_to_start": 2
+            },
+            "option_text": {
+                "resume": "CONTINUE",
+                "settings": "ADJUST SETTINGS",
+                "quit_to_start": "QUIT RUN"
+            },
+            "option_indicies": [
+                "resume",
+                "settings",
+                "quit_to_start"
+            ],
+        },
+    },
+    "selected_option": 0,
+    "current_menu": Menus.WELCOME
+}
+
+#   C
+#  /
+# / this is a wrench for settings
+
+def welcome_menu_logic():
+    global menu_data
+    global single_player
+    global debug_message
+
+    options_single_player = menu_data['options']['welcome']['option_indicies']['single_player']
+
+    if menu_data['selected_option'] == options_single_player:
+        player
+
+    if key_just_down['space']:
+        if menu_data['selected_option'] == options_single_player:
+            # debug_message = f"single player option {menu_data['options']['welcome']['option_indicies']['single_player']} casw {single_player_option}"
+
+            global stage_start_time
+            stage_start_time = time.time()
+        
+            global current_scene
+            current_scene = Scene.PLAY
+            
+            play_song(song_indicies['first_life'])
+            menu_data['current_menu'] = Menus.HIDDEN
+
+def menu_logic():
+    global menu_data
+
+    if not menu_data['current_menu'] == Menus.HIDDEN:
+        option_length = len(menu_data['options'][menu_data['current_menu'].value]['option_list'])
+        # debug_message = f"is up down: {key_just_down['up']}"
+        if key_just_down['up']:
+            menu_data['selected_option'] = (menu_data['selected_option'] - 1)%option_length
+        if key_just_down['down']:
+            menu_data['selected_option'] = (menu_data['selected_option'] + 1)%option_length
+    
+    global current_scene
+    if menu_data['current_menu'] == Menus.HIDDEN and current_scene == Scene.PLAY and key_just_down['p']:
+        global paused
+        paused = not paused
+    
+    if menu_data['current_menu'] == Menus.WELCOME:
+        welcome_menu_logic()
+
+
 def tick(stdscr):
     global current_scene
     global entity_buffer
-    global stage_start_time
 
-    global play_welcome_song
+    menu_logic()
 
-    if current_scene == Scene.PLAY:
+    if current_scene == Scene.PLAY and not paused:
         handle_player()
         
         max_index = len(entity_buffer)
@@ -770,15 +912,7 @@ def tick(stdscr):
             
             current_index += 1
 
-        if key_just_down["space"]:
-            stage_start_time = time.time()
-            current_scene = Scene.PLAY
-            
-            play_song(song_indicies['first_life'])
-    
-    release_key_just_down()
-
-def draw_start_scene(stdscr):
+def draw_start_title(stdscr):
     # title = ["                   Yapheth Stephan Nathaniel's re-enacment of                   ",
     #          "     ___           ___           ___       ___           ___           ___      ",
     #          "    /\  \         /\  \         /\__\     /\  \         /\  \         /\  \     ",
@@ -840,13 +974,30 @@ def draw_start_scene(stdscr):
     layout_g.draw_at(stdscr, top_left.y + 1 + round(math.sin(5*time.time() + 3.1415926535 * 4/6)), top_left.x + 52)
     layout_a.draw_at(stdscr, top_left.y + 1 + round(math.sin(5*time.time() + 3.1415926535 * 5/6)), top_left.x + 66)
 
-    # for index in range(dimensions.y):
-    #     stdscr.addstr(top_left.y + index, top_left.x, title[index])
+def draw_start_menu(stdscr):
+    dimensions = vec2(80, 14) # copy pasted, I know. we all love hardcoded values. this is not a normalised form 3
+    top_left = vec2(curses.COLS, curses.LINES).substr(dimensions).calc_divide(2).calc_to_int()
 
-    if (time.time()*500)%1000 < 800:
-        stdscr.addstr(top_left.y + dimensions.y, top_left.x + dimensions.x//2 - 10, "Press SPACE To Start")
+    global menu_data
+    option_data = menu_data['options']['welcome']
 
-def draw_hud(stdscr):
+    for index, option in enumerate(option_data['option_list']):
+        if menu_data['selected_option'] == option_data['option_indicies'][option]: # why doesn't python adopt dot notation
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 12, ">")
+
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 10, option_data['option_text'][option], curses.A_STANDOUT)
+        else:
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 10, option_data['option_text'][option])
+
+
+def draw_menu(stdscr):
+    global menu_data
+    global debug_message
+    
+    if menu_data['current_menu'] == Menus.WELCOME:
+        draw_start_menu(stdscr)
+
+def draw_gameplay_hud(stdscr):
     global player
 
     stdscr.addstr(curses.LINES - 3, curses.COLS - 45, "REMAINING HEALTH:")
@@ -884,9 +1035,11 @@ def render(stdscr):
 
     global current_scene
     if current_scene == Scene.START:
-        draw_start_scene(stdscr)
+        draw_start_title(stdscr)
     if current_scene == Scene.PLAY:
-        draw_hud(stdscr)
+        draw_gameplay_hud(stdscr)
+
+    draw_menu(stdscr)
     
     stdscr.addstr(curses.LINES - 1, 0, f"debug: {debug_message} | buffer size: {len(entity_buffer)}")
 
@@ -894,16 +1047,26 @@ def render(stdscr):
 
 
 def main(stdscr):
+    global debug_message
+
     stdscr.clear()
     curses.noecho()
     curses.cbreak()
     stdscr.keypad(True)
     stdscr.nodelay(True)
-    
+
     while True:
+        prev_time = time.time()
+
+        buffer_key_just_down()
+
         tick(stdscr)
         render(stdscr)
-        time.sleep(0.016667)
+
+        release_key_just_down()
+
+        # debug_message = f"time lost {time.time() - prev_time} sleep duation {0.016667 - time.time() + prev_time}"
+        time.sleep(max(0.016667 - time.time() + prev_time, 0))
 
 curses.wrapper(main)
 
