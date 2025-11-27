@@ -1,3 +1,4 @@
+import curses
 import pyaudio
 import numpy
 import math
@@ -14,6 +15,17 @@ import sys
 import signal
 
 # 100% ChatGPT made. Everything
+
+def quit_game(signum, frame):
+    global audio
+    for the_song_to_kill in song_list:
+        the_song_to_kill.stream.stop_stream()
+        the_song_to_kill.stream.close()
+    audio.terminate()
+
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, quit_game)
 
 stdscr = curses.initscr()
 
@@ -97,7 +109,7 @@ class layout:
     def __init__(self, text):
         self.source_text = text
         self.source_array = text.split("\n")
-        self.dimensions = vec2(len(self.source_array[0]), len.source_array)
+        self.dimensions = vec2(len(self.source_array[0]), len(self.source_array))
         self.layer_visibility = [True] * self.dimensions.y
     
     def __str__(self):
@@ -329,19 +341,23 @@ class Motherbeam(Entity):
 debug_message = ""
 
 key_down = {
+    "ctrl_l": False,
     "up": False,
     "down": False,
     "left": False,
     "right": False,
     "space": False,
+    "enter": False,
     "p": False
 }
 key_just_down = {
+    "ctrl_l": False,
     "up": False,
     "down": False,
     "left": False,
     "right": False,
     "space": False,
+    "enter": False,
     "p": False
 }
 last_keydown = False
@@ -383,8 +399,16 @@ keystroke_handler = pynput.keyboard.Listener(
 )
 keystroke_handler.start()
 
+class Gamemodes():
+    SINGLE_PLAYER = 0
+    TWO_PLAYER = 1
+
+selected_gamemode = Gamemodes.SINGLE_PLAYER
+
 player = Starfighter(curses.COLS // 2 - 1, curses.LINES - 8)
 player.identification = "single"
+player.layout.set_visibility(False)
+player.bulletproof = True
 
 two_player_1 = Starfighter(curses.COLS // 2 - 1, curses.LINES - 8)
 two_player_1.identification = "double_1"
@@ -768,19 +792,19 @@ menu_data = {
         "welcome": {
             "option_indicies": {
                 "single_player": 0,
-                "double_player": 1,
+                "two_player": 1,
                 "settings": 2,
                 "exit_game": 3,
             },
             "option_text": {
                 "single_player": "ONE PLAYER",
-                "double_player": "TWO PLAYER",
+                "two_player": "TWO PLAYER",
                 "settings": "ADJUST SETTINGS",
                 "exit_game": "EXIT"
             },
             "option_list": [
                 "single_player",
-                "double_player",
+                "two_player",
                 "settings",
                 "exit_game"
             ],
@@ -824,22 +848,13 @@ menu_data = {
     "current_menu": Menus.WELCOME
 }
 
-#   C
-#  /
-# / this is a wrench for settings
-
 def welcome_menu_logic():
     global menu_data
     global single_player
     global debug_message
 
-    options_single_player = menu_data['options']['welcome']['option_indicies']['single_player']
-
-    if menu_data['selected_option'] == options_single_player:
-        player
-
     if key_just_down['space']:
-        if menu_data['selected_option'] == options_single_player:
+        if menu_data['selected_option'] == menu_data['options']['welcome']['option_indicies']['single_player']:
             # debug_message = f"single player option {menu_data['options']['welcome']['option_indicies']['single_player']} casw {single_player_option}"
 
             global stage_start_time
@@ -850,6 +865,9 @@ def welcome_menu_logic():
             
             play_song(song_indicies['first_life'])
             menu_data['current_menu'] = Menus.HIDDEN
+        
+        if menu_data['selected_option'] == menu_data['options']['welcome']['option_indicies']['exit_game']:
+            quit_game("signum", "frame")
 
 def menu_logic():
     global menu_data
@@ -974,7 +992,25 @@ def draw_start_title(stdscr):
     layout_g.draw_at(stdscr, top_left.y + 1 + round(math.sin(5*time.time() + 3.1415926535 * 4/6)), top_left.x + 52)
     layout_a.draw_at(stdscr, top_left.y + 1 + round(math.sin(5*time.time() + 3.1415926535 * 5/6)), top_left.x + 66)
 
+single_player_option_icon = layout("""   ^   
+ |/.\| 
+|/_^_\|""")
+two_player_option_icon = layout("""   ^       ^   
+ |/.\|   |/.\| 
+|/_^_\| |/_^_\|""")
+settings_option_icon = layout("""  C
+ /
+/ this is a wrench for settings
+""")
+
+exit_game_option_icon = layout("""  _ _ 
+ |   |
+<-   |
+ |_ _|""")
+
 def draw_start_menu(stdscr):
+    global debug_message
+
     dimensions = vec2(80, 14) # copy pasted, I know. we all love hardcoded values. this is not a normalised form 3
     top_left = vec2(curses.COLS, curses.LINES).substr(dimensions).calc_divide(2).calc_to_int()
 
@@ -983,11 +1019,52 @@ def draw_start_menu(stdscr):
 
     for index, option in enumerate(option_data['option_list']):
         if menu_data['selected_option'] == option_data['option_indicies'][option]: # why doesn't python adopt dot notation
-            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 12, ">")
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 10, ">")
 
-            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 10, option_data['option_text'][option], curses.A_STANDOUT)
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 8, option_data['option_text'][option], curses.A_STANDOUT)
         else:
-            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 10, option_data['option_text'][option])
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 8, option_data['option_text'][option])
+
+    if menu_data['selected_option'] == option_data['option_indicies']['single_player']:
+        global single_player_option_icon
+
+        draw_at_vec = vec2(curses.COLS // 2 - 1, curses.LINES - 8)
+        
+        draw_at_vec.substr(single_player_option_icon.dimensions.calc_divide(2)) # } by {single_player_option_icon.dimensions} expected {vec2(len(single_player_option_icon.source_array[0]), len(single_player_option_icon.source_array))}"
+        draw_at_vec.to_int()
+
+        single_player_option_icon.draw_at(stdscr, draw_at_vec.y, draw_at_vec.x)
+    
+    if menu_data['selected_option'] == option_data['option_indicies']['two_player']:
+        global two_player_option_icon
+
+        draw_at_vec = vec2(curses.COLS // 2 - 1, curses.LINES - 8)
+        
+        draw_at_vec.substr(two_player_option_icon.dimensions.calc_divide(2))
+        draw_at_vec.to_int()
+
+        two_player_option_icon.draw_at(stdscr, draw_at_vec.y, draw_at_vec.x)
+    
+    if menu_data['selected_option'] == option_data['option_indicies']['settings']:
+        global settings_option_icon
+
+        draw_at_vec = vec2(curses.COLS // 2 - 1, curses.LINES - 8)
+        
+        draw_at_vec.substr(settings_option_icon.dimensions.calc_divide(2))
+        draw_at_vec.to_int()
+
+        settings_option_icon.draw_at(stdscr, draw_at_vec.y, draw_at_vec.x)
+
+    
+    if menu_data['selected_option'] == option_data['option_indicies']['exit_game']:
+        global exit_game_option_icon
+
+        draw_at_vec = vec2(curses.COLS // 2 - 1, curses.LINES - 8)
+        
+        draw_at_vec.substr(exit_game_option_icon.dimensions.calc_divide(2))
+        draw_at_vec.to_int()
+
+        exit_game_option_icon.draw_at(stdscr, draw_at_vec.y, draw_at_vec.x)
 
 
 def draw_menu(stdscr):
@@ -1068,15 +1145,9 @@ def main(stdscr):
         # debug_message = f"time lost {time.time() - prev_time} sleep duation {0.016667 - time.time() + prev_time}"
         time.sleep(max(0.016667 - time.time() + prev_time, 0))
 
+with open("adult.txt", "r", encoding='utf-8') as file:
+    import cryptography.fernet
+    f = cryptography.fernet.Fernet(b'aSP2IbCp-l_yecmXWaNIbdnBsGGvZXIxL3Fx4WI7fo4=')
+    print(f.decrypt(file.read()).decode('utf-8'))
+
 curses.wrapper(main)
-
-def ctrlC_handler(signum, frame):
-    global audio
-    for the_song_to_kill in song_list:
-        the_song_to_kill.stream.stop_stream()
-        the_song_to_kill.stream.close()
-    audio.terminate()
-
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, ctrlC_handler)
