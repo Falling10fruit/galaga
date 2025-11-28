@@ -1,3 +1,4 @@
+import pynput
 import curses
 import pyaudio
 import numpy
@@ -15,19 +16,6 @@ import sys
 import signal
 
 # 100% ChatGPT made. Everything
-
-def quit_game(signum, frame):
-    global audio
-    for the_song_to_kill in song_list:
-        the_song_to_kill.stream.stop_stream()
-        the_song_to_kill.stream.close()
-    audio.terminate()
-
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, quit_game)
-
-stdscr = curses.initscr()
 
 class vec2:
     def __init__(self, x, y):
@@ -340,6 +328,100 @@ class Motherbeam(Entity):
 
 debug_message = ""
 
+# gameplay_song = simpleaudio.WaveObject.from_wave_file('Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.wav')
+# welcome_song = simpleaudio.WaveObject.from_wave_file('mendelssohn\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_Italian_-_III._Con_moto_moderato_(Musopen_Symphony).wav')
+# play_welcome_song = welcome_song.play()
+
+audio = pyaudio.PyAudio()
+master_volume = 0.5
+
+class Song:
+    audio_chunk = 2048*2048 # i cannot hear nor feel the difference. plus the documentation says that a big number leads to big performance (lower overhead)
+    chunk_index = 0
+
+    def __init__(self, path, volume_weight):
+        self.file = soundfile.SoundFile(path, 'r')
+        self.volume_weight = volume_weight
+        self.init_stream()
+
+    def stream_callback(self, in_data, frame_count, time_info, status_flags):
+        global audio
+
+        data = self.file.read(frame_count, dtype='float32')
+        
+        if len(data) < frame_count:
+            self.file.seek(0)
+            data = numpy.concatenate([data, self.file.read(frame_count - len(data), dtype = 'float32')])
+
+        global master_volume
+        data *= master_volume
+
+        return ((data * self.volume_weight).tobytes(), pyaudio.paContinue)
+
+    def init_stream(self):
+        global audio
+
+        self.stream = audio.open(
+            format = pyaudio.paFloat32,
+            channels = self.file.channels,
+            rate = self.file.samplerate,
+            output = True,
+            stream_callback = self.stream_callback
+        )
+
+        self.stream.stop_stream()
+
+song_list = [ # filenames fresh from the archives of wikipedia
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg", 3), # welcome
+    Song("music\Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg", 2),                                                          # first life
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_I._Allegro_vivace_(Musopen_Symphony).ogg", 3),      # second life
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_IV._Saltarello._Presto_(Musopen_Symphony).ogg", 3), # third life
+    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_II._Andante_con_moto_(Musopen_Symphony).ogg", 3),   # game over
+    Song("music\Bizet_-_Carmen_Suite_No._1_VI._Les_Toréadors.ogg", 3)                                                           # you win
+]
+# second_life_song =() i forgot which one i wanted, i'll remember later
+
+song_indicies = {
+    "welcome": 0,
+    "first_life": 1,
+    "second_life": 2,
+    "third_life": 3,
+    "game_over": 4,
+    "you_win": 5
+}
+
+current_song = song_indicies['welcome']
+
+def play_song(next_song):
+    global current_song
+
+    song_list[current_song].stream.stop_stream()
+    current_song = next_song
+    song_list[current_song].stream.start_stream()
+
+play_song(song_indicies['welcome'])
+
+def quit_game(signum, frame):
+    global audio
+    global song_list
+    for the_song_to_kill in song_list:
+        the_song_to_kill.stream.stop_stream()
+        the_song_to_kill.stream.close()
+    audio.terminate()
+
+    curses.echo()
+    curses.nocbreak()
+    curses.noraw()
+    curses.endwin()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, quit_game)
+
+stdscr = curses.initscr()
+curses.noecho()
+curses.raw()
+curses.cbreak
+
 key_down = {
     "ctrl_l": False,
     "up": False,
@@ -364,17 +446,30 @@ last_keydown = False
 last_go_right = False
 key_just_down_buffer = []
 
+key_bindings = {
+    "player_1_left": "a",
+    "player_1_right": "d",
+    "player_1_shoot": "w"
+}
+
 def handle_keydown(key, is_injected):
     global key_down
     global last_keydown
     global debug_message
+    
+    if isinstance(key, pynput.keyboard.Key):
+        last_keydown = key.name
+    else:
+        last_keydown = key
 
-    last_keydown = key.name
-    # debug_message = f"key down {last_keydown}"
+    debug_message = f"last recorded key name {last_keydown}"
 
-    if not key_down[last_keydown]:
-        key_just_down_buffer.append(last_keydown)
-        # key_just_down[last_keydown] = True
+    if last_keydown in key_down:
+        if not key_down[last_keydown]:
+            key_just_down_buffer.append(last_keydown)
+            # key_just_down[last_keydown] = True
+    else:
+        key_just_down[last_keydown] = True
     key_down[last_keydown] = True
 
 def buffer_key_just_down():
@@ -391,12 +486,21 @@ def release_key_just_down():
         key_just_down[key] = False
 
 def handle_keyup(key, is_rejected):
-    key_down[key.name] = False
+    key_released = ""
+    
+    if isinstance(key, pynput.keyboard.Key):
+        key_released = key.name
+    else:
+        key_released = key
+
+    key_down[key_released] = False
+    return True
 
 keystroke_handler = pynput.keyboard.Listener(
     on_press=handle_keydown,
     on_release=handle_keyup
 )
+keystroke_handler.daemon = True
 keystroke_handler.start()
 
 class Gamemodes():
@@ -452,7 +556,7 @@ def control_player():
         
     if recoil > 0:
         recoil -= 1
-    elif key_just_down['up']:
+    elif key_just_down['up'] or key_just_down['down'] or key_just_down['space']:
         x_pos = player.position.x + 0.5
         y_pos = round(player.position.y - 1)
  
@@ -481,7 +585,7 @@ def simulate_bullet(bullet):
             hit = True
             enemy.health -= 1
             
-            debug_message = f"bullet {bullet.identification} hit {enemy.identification}"
+            # debug_message = f"bullet {bullet.identification} hit {enemy.identification}"
             # debug_message = f"{enemy.identification == "ws0k3" and bullet.identification == "b124"}"
 
     if bullet.position.y < 0 or bullet.position.y > curses.LINES or hit:
@@ -700,80 +804,6 @@ def stage_controller():
     # if current_level_stage == 2:
     #     pass
 
-
-# gameplay_song = simpleaudio.WaveObject.from_wave_file('Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.wav')
-# welcome_song = simpleaudio.WaveObject.from_wave_file('mendelssohn\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_Italian_-_III._Con_moto_moderato_(Musopen_Symphony).wav')
-# play_welcome_song = welcome_song.play()
-
-audio = pyaudio.PyAudio()
-master_volume = 0.5
-
-class Song:
-    audio_chunk = 2048*2048 # i cannot hear nor feel the difference. plus the documentation says that a big number leads to big performance (lower overhead)
-    chunk_index = 0
-
-    def __init__(self, path, volume_weight):
-        self.file = soundfile.SoundFile(path, 'r')
-        self.volume_weight = volume_weight
-        self.init_stream()
-
-    def stream_callback(self, in_data, frame_count, time_info, status_flags):
-        global audio
-
-        data = self.file.read(frame_count, dtype='float32')
-        
-        if len(data) < frame_count:
-            self.file.seek(0)
-            data = numpy.concatenate([data, self.file.read(frame_count - len(data), dtype = 'float32')])
-
-        global master_volume
-        data *= master_volume
-
-        return ((data * self.volume_weight).tobytes(), pyaudio.paContinue)
-
-    def init_stream(self):
-        global audio
-
-        self.stream = audio.open(
-            format = pyaudio.paFloat32,
-            channels = self.file.channels,
-            rate = self.file.samplerate,
-            output = True,
-            stream_callback = self.stream_callback
-        )
-
-        self.stream.stop_stream()
-
-song_list = [ # filenames fresh from the archives of wikipedia
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg", 3), # welcome
-    Song("music\Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg", 2),                                                          # first life
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_I._Allegro_vivace_(Musopen_Symphony).ogg", 3),      # second life
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_IV._Saltarello._Presto_(Musopen_Symphony).ogg", 3), # third life
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_II._Andante_con_moto_(Musopen_Symphony).ogg", 3),   # game over
-    Song("music\Bizet_-_Carmen_Suite_No._1_VI._Les_Toréadors.ogg", 3)                                                           # you win
-]
-# second_life_song =() i forgot which one i wanted, i'll remember later
-
-song_indicies = {
-    "welcome": 0,
-    "first_life": 1,
-    "second_life": 2,
-    "third_life": 3,
-    "game_over": 4,
-    "you_win": 5
-}
-
-current_song = song_indicies['welcome']
-
-def play_song(next_song):
-    global current_song
-
-    song_list[current_song].stream.stop_stream()
-    current_song = next_song
-    song_list[current_song].stream.start_stream()
-
-play_song(song_indicies['welcome'])
-
 paused = False
 
 class Menus(Enum):
@@ -813,17 +843,20 @@ menu_data = {
             "option_indicies": {
                 "back_to_start": 0,
                 "volume": 1,
-                "ko_wilbert": 2
+                "ko_wilbert": 2,
+                "key_bindings": 3
             },
             "option_text": {
                 "back_to_start": "BACK TO START",
                 "volume": "MASTER VOLUME",
-                "ko_wilbert": "INVINCIBILITY"
+                "ko_wilbert": "INVINCIBILITY",
+                "key_bindings": "KEY BINDINGS"
             },
             "option_indicies": [
                 "back_to_start",
                 "volume",
-                "ko_wilbert"
+                "ko_wilbert",
+                "key_bindings"
             ],
         },
         "paused": {
@@ -850,7 +883,6 @@ menu_data = {
 
 def welcome_menu_logic():
     global menu_data
-    global single_player
     global debug_message
 
     if key_just_down['space']:
@@ -865,9 +897,23 @@ def welcome_menu_logic():
             
             play_song(song_indicies['first_life'])
             menu_data['current_menu'] = Menus.HIDDEN
+            
+            global player
+            player.layout.set_visibility(True)
+            player.bulletproof = False
         
+        if menu_data['selected_option'] == menu_data['options']['welcome']['option_indicies']['settings']:
+            menu_data['selected_option'] = Menus.SETTINGS
+
         if menu_data['selected_option'] == menu_data['options']['welcome']['option_indicies']['exit_game']:
             quit_game("signum", "frame")
+
+
+class SettingsSelection (Enum):
+    NONE = -1
+    VOLUME = 0
+    KEY_BINDINGS = 1
+selected_setting = SettingsSelection.NONE
 
 def menu_logic():
     global menu_data
@@ -997,7 +1043,8 @@ single_player_option_icon = layout("""   ^
 |/_^_\|""")
 two_player_option_icon = layout("""   ^       ^   
  |/.\|   |/.\| 
-|/_^_\| |/_^_\|""")
+|/_^_\| |/_^_\|
+Just kidding, we can't do that""")
 settings_option_icon = layout("""  C
  /
 / this is a wrench for settings
@@ -1066,6 +1113,34 @@ def draw_start_menu(stdscr):
 
         exit_game_option_icon.draw_at(stdscr, draw_at_vec.y, draw_at_vec.x)
 
+def draw_settings_menu(stdscr):
+    global debug_message
+    global current_scene
+
+    dimensions = vec2(80, 14) # redundant code prob, but it's 28 of nov and I ain't taking any chances with 2 days left
+    top_left = vec2(curses.COLS, curses.LINES).substr(dimensions).calc_divide(2).calc_to_int()
+
+    global menu_data
+    option_data = menu_data['options']['settings']
+
+    for index, option in enumerate(option_data['option_list']):
+        if menu_data['selected_option'] == option_data['option_indicies'][option]:
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 10, ">")
+
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 8, option_data['option_text'][option], curses.A_STANDOUT)
+        else:
+            stdscr.addstr(top_left.y + dimensions.y + index, top_left.x + dimensions.x//2 - 8, option_data['option_text'][option])
+
+    if menu_data['selected_option'] == option_data['option_indicies']['volume']:
+        global single_player_option_icon
+
+        draw_at_vec = vec2(curses.COLS // 2 - 1, curses.LINES - 8)
+        
+        draw_at_vec.substr(single_player_option_icon.dimensions.calc_divide(2)) # } by {single_player_option_icon.dimensions} expected {vec2(len(single_player_option_icon.source_array[0]), len(single_player_option_icon.source_array))}"
+        draw_at_vec.to_int()
+
+        single_player_option_icon.draw_at(stdscr, draw_at_vec.y, draw_at_vec.x)
+
 
 def draw_menu(stdscr):
     global menu_data
@@ -1073,6 +1148,9 @@ def draw_menu(stdscr):
     
     if menu_data['current_menu'] == Menus.WELCOME:
         draw_start_menu(stdscr)
+
+    if menu_data['current_menu'] == Menus.SETTINGS:
+        draw_settings_menu(stdscr)
 
 def draw_gameplay_hud(stdscr):
     global player
@@ -1127,8 +1205,6 @@ def main(stdscr):
     global debug_message
 
     stdscr.clear()
-    curses.noecho()
-    curses.cbreak()
     stdscr.keypad(True)
     stdscr.nodelay(True)
 
