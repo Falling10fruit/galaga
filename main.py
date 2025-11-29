@@ -10,8 +10,13 @@ import string
 import soundfile
 import sys
 import signal
+import os
+from pathlib import Path
 
-# 100% ChatGPT made. Everything
+BASE_DIR = Path(__file__).resolve().parent
+
+cols = curses.COLS if hasattr(curses, "COLS") else 80
+lines = curses.LINES if hasattr(curses, "LINES") else 24
 
 class vec2:
     def __init__(self, x, y):
@@ -360,6 +365,8 @@ debug_message = ""
 audio = pyaudio.PyAudio()
 master_volume = 0.5
 
+MUSIC_DIR = BASE_DIR / "music"
+
 class Song:
     audio_chunk = 2048*2048 # i cannot hear nor feel the difference. plus the documentation says that a big number leads to big performance (lower overhead)
     chunk_index = 0
@@ -396,13 +403,13 @@ class Song:
 
         self.stream.stop_stream()
 
-song_list = [ # filenames fresh from the archives of wikipedia
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg", 3), # welcome
-    Song("music\Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg", 2),                                                          # first life
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_I._Allegro_vivace_(Musopen_Symphony).ogg", 3),      # second life
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_IV._Saltarello._Presto_(Musopen_Symphony).ogg", 3), # third life
-    Song("music\Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_II._Andante_con_moto_(Musopen_Symphony).ogg", 3),   # game over
-    Song("music\Bizet_-_Carmen_Suite_No._1_VI._Les_Toréadors.ogg", 3)                                                           # you win
+song_list = [
+    Song(MUSIC_DIR / "Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_III._Con_moto_moderato_(Musopen_Symphony).ogg", 3),
+    Song(MUSIC_DIR / "Mozart_-_Eine_kleine_Nachtmusik_-_1._Allegro.ogg", 2),
+    Song(MUSIC_DIR / "Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_I._Allegro_vivace_(Musopen_Symphony).ogg", 3),
+    Song(MUSIC_DIR / "Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_IV._Saltarello._Presto_(Musopen_Symphony).ogg", 3),
+    Song(MUSIC_DIR / "Mendelssohn_-_Symphony_No._4_in_A_major,_Op._90_'Italian'_-_II._Andante_con_moto_(Musopen_Symphony).ogg", 3),
+    Song(MUSIC_DIR / "Bizet_-_Carmen_Suite_No._1_VI._Les_Toréadors.ogg", 3)
 ]
 # second_life_song =() i forgot which one i wanted, i'll remember later
 
@@ -442,10 +449,27 @@ def quit_game(signum, frame):
 
 signal.signal(signal.SIGINT, quit_game)
 
-stdscr = curses.initscr()
-curses.noecho()
-curses.raw()
-curses.cbreak
+def init_screen(stdscr):
+    curses.noecho()
+    curses.raw()
+    curses.cbreak()
+
+    # Create the initial dancer minions (previously executed at import)
+    five_inaccuracy = (curses.COLS + 10) % 5
+    six_inaccuracy = (curses.COLS + 10) % 6
+    seven_inaccuracy = (curses.COLS + 10) % 7
+    chosen_inaccuracy = min(five_inaccuracy, six_inaccuracy, seven_inaccuracy)
+    spacing = 7
+    if six_inaccuracy == chosen_inaccuracy:
+        spacing = 6
+    if five_inaccuracy == chosen_inaccuracy:
+        spacing = 5
+
+    for i in range(math.floor((curses.COLS + 10) / spacing)):
+        new_minion = Minion()
+        new_minion.identification = f"dancer_{i}"
+        new_minion.stage_offset = vec2((i - 1) * spacing, 0)
+        new_minion.health = 0
 
 key_down = {
     "ctrl_l": False,
@@ -459,7 +483,8 @@ key_down = {
     "w": False,
     "a": False,
     "s": False,
-    "d": False
+    "d": False,
+    "esc": False
 }
 key_just_down = {
     "ctrl_l": False,
@@ -473,7 +498,8 @@ key_just_down = {
     "w": False,
     "a": False,
     "s": False,
-    "d": False
+    "d": False,
+    "esc": False
 }
 last_keydown = False
 last_go_right = False
@@ -639,23 +665,6 @@ def simulate_bullet(bullet):
 # monster = Minion(curses.COLS // 2 - 1, 10)
 # monster.identification = "m0n3r"
 # These guys are just dancers
-five_inaccuracy = (curses.COLS + 10)%5
-six_inaccuracy = (curses.COLS + 10)%6
-seven_inaccuracy = (curses.COLS + 10)%7
-chosen_inaccuracy = min(five_inaccuracy, min(six_inaccuracy, seven_inaccuracy))
-spacing = 7
-if six_inaccuracy == chosen_inaccuracy:
-    spacing = 6
-if five_inaccuracy == chosen_inaccuracy:
-    spacing = 5
-
-# debug_message = f"chosen spacing {spacing} number of minions to dance {math.floor((curses.COLS + 10)/spacing)}"
-for i in range(math.floor((curses.COLS + 10)/spacing)):
-    new_minion = Minion()
-    new_minion.identification = f"dancer_{i}"
-    new_minion.stage_offset = vec2((i - 1) * spacing, 0)
-    new_minion.health = 0
-
 
 def handle_enemies(current_enemy):
     global debug_message
@@ -773,11 +782,19 @@ def stage_controller():
     global stage_start_time
     global level_stages
     global current_level_stage
+    global current_scene
+    
+    # Safety check to prevent crashing if we exceed defined stages
+    if current_level_stage >= len(level_stages):
+        return
 
     current_stage = level_stages[current_level_stage]
     minion_pool_size = len(current_stage['minion_positions_pool'])
     butterflu_pool_size = len(current_stage['butterflu_positions_pool'])
 
+    # --- SPAWNING LOGIC ---
+    
+    # STAGE 0 SPAWN LOGIC
     if current_level_stage == 0:
         if minion_pool_size > 0:
             if minion_spawn_delay > 0:
@@ -785,7 +802,7 @@ def stage_controller():
             else:
                 new_minion = Minion()
                 new_minion.path_index = minion_spawn_path
-                new_minion.stage_offset = level_stages[current_level_stage]['minion_positions_pool'].pop(random.randint(0, minion_pool_size - 1))
+                new_minion.stage_offset = current_stage['minion_positions_pool'].pop(random.randint(0, minion_pool_size - 1))
                 new_minion.stage_index = 0
                 new_minion.attack_delay = 180
 
@@ -802,28 +819,24 @@ def stage_controller():
             else:
                 new_butterflu = Butterflu(curses.COLS/2, 0)
                 new_butterflu.enemy_behavior = EnemyBehavior.GOING_TO_LINE
-                new_butterflu.stage_offset = level_stages[current_level_stage]['butterflu_positions_pool'].pop(random.randint(0, butterflu_pool_size - 1))
+                new_butterflu.stage_offset = current_stage['butterflu_positions_pool'].pop(random.randint(0, butterflu_pool_size - 1))
                 new_butterflu.stage_index = 0
                 new_butterflu.attack_delay = 300
 
                 butterflu_spawn_delay = 8
         
+        # Animate the stage background offset
         current_stage['stage_offset'] = vec2(math.sin(time.time())*4, math.sin(time.time()*2))
-        if time.time() - stage_start_time > 29.5:
-            current_level_stage = 1
-            minion_spawn_delay = 0
-            minion_spawn_path = PathIndex['STAGE_2_MINION_RIGHT']
-            butterflu_spawn_delay = 0
-            butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
     
-    if current_level_stage == 1:
+    # STAGE 1 SPAWN LOGIC
+    elif current_level_stage == 1:
         if minion_pool_size > 0:
             if minion_spawn_delay > 0:
                 minion_spawn_delay -= 1
             else:
                 new_minion = Minion()
                 new_minion.path_index = minion_spawn_path
-                new_minion.stage_offset = level_stages[current_level_stage]['minion_positions_pool'].pop(random.randint(0, minion_pool_size - 1))
+                new_minion.stage_offset = current_stage['minion_positions_pool'].pop(random.randint(0, minion_pool_size - 1))
                 new_minion.stage_index = 1
                 new_minion.attack_delay = 180
 
@@ -840,7 +853,7 @@ def stage_controller():
             else:
                 new_butterflu = Butterflu()
                 new_butterflu.path_index = butterflu_spawn_path
-                new_butterflu.stage_offset = level_stages[current_level_stage]['butterflu_positions_pool'].pop(random.randint(0, butterflu_pool_size - 1))
+                new_butterflu.stage_offset = current_stage['butterflu_positions_pool'].pop(random.randint(0, butterflu_pool_size - 1))
                 new_butterflu.stage_index = 1
                 new_butterflu.attack_delay = 300
 
@@ -850,16 +863,74 @@ def stage_controller():
                     butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_RIGHT']
                 else:
                     butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
-            
-    #     if time.time() - stage_start_time > 60:
-    #         current_level_stage = 2
-    #         minion_spawn_delay = 0
-    #         minion_spawn_path = PathIndex['STAGE_2_MINION_RIGHT']
-    #         butterflu_spawn_delay = 0
-    #         butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
+
+    # STAGE 2 SPAWN LOGIC (Enabled)
+    elif current_level_stage == 2:
+        if minion_pool_size > 0:
+            if minion_spawn_delay > 0:
+                minion_spawn_delay -= 1
+            else:
+                new_minion = Minion()
+                new_minion.path_index = minion_spawn_path
+                new_minion.stage_offset = current_stage['minion_positions_pool'].pop(random.randint(0, minion_pool_size - 1))
+                new_minion.stage_index = 2
+                new_minion.attack_delay = 120 # Faster attacks in stage 2
+                minion_spawn_delay = 6
+
+                # Alternate paths
+                if minion_spawn_path == PathIndex['STAGE_1_MINION_LEFT']:
+                    minion_spawn_path = PathIndex['STAGE_1_MINION_RIGHT']
+                else:
+                    minion_spawn_path = PathIndex['STAGE_1_MINION_LEFT']
+
+        if butterflu_pool_size > 0:
+            if butterflu_spawn_delay > 0:
+                butterflu_spawn_delay -= 1
+            else:
+                new_butterflu = Butterflu(curses.COLS/2, 0)
+                new_butterflu.enemy_behavior = EnemyBehavior.GOING_TO_LINE
+                new_butterflu.stage_offset = current_stage['butterflu_positions_pool'].pop(random.randint(0, butterflu_pool_size - 1))
+                new_butterflu.stage_index = 2
+                new_butterflu.attack_delay = 200
+                butterflu_spawn_delay = 8
+
+
+    # --- TRANSITION LOGIC (Next Stage) ---
     
-    # if current_level_stage == 2:
-    #     pass
+    # 1. Check if we have exhausted the spawn pools for the current stage
+    if minion_pool_size == 0 and butterflu_pool_size == 0:
+        
+        # 2. Check if there are any enemies alive in the buffer
+        enemies_alive = False
+        for entity in entity_buffer:
+            if isinstance(entity, Enemy) and entity.health > 0:
+                enemies_alive = True
+                break
+        
+        # 3. If no enemies are left, advance the stage
+        if not enemies_alive:
+            # Check if there is a next stage available
+            if current_level_stage < len(level_stages) - 1:
+                current_level_stage += 1
+                stage_start_time = time.time()
+                
+                # Reset spawn timers
+                minion_spawn_delay = 10
+                butterflu_spawn_delay = 10
+                
+                # Set specific paths based on the new stage
+                if current_level_stage == 1:
+                    minion_spawn_path = PathIndex['STAGE_2_MINION_RIGHT']
+                    butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
+                elif current_level_stage == 2:
+                    minion_spawn_path = PathIndex['STAGE_1_MINION_LEFT']
+                    butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
+            
+            else:
+                # YOU WIN (Ran out of stages)
+                # For now, we reuse the Game Over scene but play the victory song
+                current_scene = Scene.DIED
+                play_song(song_indicies['you_win'])
 
 paused = False
 
@@ -1002,6 +1073,8 @@ def welcome_menu_logic():
 
         if menu_data['selected_option'] == menu_data['options']['welcome']['option_indicies']['exit_game']:
             quit_game("signum", "frame")
+    return
+
 
 class SettingsSelection (Enum):
     NONE = -1
@@ -1062,12 +1135,123 @@ def menu_logic():
     global debug_message
     
     global current_scene
+    global entity_buffer
+    global player_pool
+    global stage_start_time
+
+    # GLOBAL VARIABLES NEEDED FOR RESET
+    global level_stages
+    global current_level_stage
+    global minion_spawn_delay, butterflu_spawn_delay
+    global minion_spawn_path, butterflu_spawn_path
+
+    # 1. Handle Game Over Input (High Priority)
+    if current_scene == Scene.DIED:
+        if key_just_down['space']:
+            # --- FULL RESET LOGIC START ---
+            
+            # 1. Clear Entities
+            entity_buffer.clear()
+            player_pool.clear()
+            
+            # 2. Reset Menu State
+            menu_data['current_menu'] = Menus.WELCOME
+            menu_data['selected_option'] = 0
+            current_scene = Scene.START
+            play_song(song_indicies['welcome'])
+
+            # 3. RESET STAGE VARIABLES (This fixes the "nothing loads" bug)
+            current_level_stage = 0
+            minion_spawn_delay = 0
+            butterflu_spawn_delay = 0
+            minion_spawn_path = PathIndex['STAGE_1_MINION_LEFT']
+            butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
+
+            # 4. REFILL ENEMY POSITION POOLS 
+            # (We have to redefine this because .pop() emptied it in the previous game)
+            level_stages = [
+                {
+                    "top_left": vec2(0.25, 0.15), 
+                    "bottom_right": vec2(0.75, 0.45), 
+                    "stage_offset": vec2(0, 0), 
+                    "stage_angle": 0, 
+                    "minion_positions_pool": [ 
+                        vec2(0, 0.5), vec2(0.125, 0.5), vec2(0.25, 0.5), vec2(0.375, 0.5), vec2(0.5, 0.5), vec2(0.625, 0.5), vec2(0.75, 0.5), vec2(0.875, 0.5), vec2(1, 0.5),
+                        vec2(0, 1), vec2(0.125, 1), vec2(0.25, 1), vec2(0.375, 1), vec2(0.5, 1), vec2(0.625, 1), vec2(0.75, 1), vec2(0.875, 1), vec2(1, 1),
+                    ],
+                    "butterflu_positions_pool": [
+                        vec2(0.2, 0), vec2(0.4, 0), vec2(0.6, 0), vec2(0.8, 0)
+                    ], 
+                    "mothership_positions_pool": []
+                }, {
+                    "top_left": vec2(0.05, 0.05),
+                    "bottom_right": vec2(0.95, 0.6),
+                    "stage_offset": vec2(0, 0),
+                    "stage_angle": 0,
+                    "minion_positions_pool": [
+                        vec2(0, 1), vec2(1/7, 1), vec2(2/7, 1), vec2(3/7, 1), vec2(4/7, 1), vec2(5/7, 1), vec2(6/7, 1), vec2(1, 1),
+                        vec2(1/14, 5/6), vec2(3/14, 5/6), vec2(5/14, 5/6), vec2(7/14, 5/6), vec2(9/14, 5/6), vec2(11/14, 5/6), vec2(13/14, 5/6),
+                        vec2(0, 4/6), vec2(1/14, 4/6), vec2(2/14, 4/6), vec2(3/14, 4/6), vec2(4/14, 4/6), vec2(5/14, 4/6), vec2(6/14, 4/6), vec2(7/14, 4/6), vec2(8/14, 4/6), vec2(9/14, 4/6), vec2(10/14, 4/6), vec2(11/14, 4/6), vec2(12/14, 4/6), vec2(13/14, 4/6), vec2(1, 4/6),
+                    ],
+                    "butterflu_positions_pool": [
+                        vec2(3/28,  3/6), vec2(3/28,  2/6), vec2(3/28,  1/6), vec2(3/28,  0),
+                        vec2(7/28,  3/6), vec2(7/28,  2/6), vec2(7/28,  1/6), vec2(7/28,  0), 
+                        vec2(11/28, 3/6), vec2(11/28, 2/6), vec2(11/28, 1/6), vec2(11/28, 0), 
+                        vec2(25/28, 3/6), vec2(25/28, 2/6), vec2(25/28, 1/6), vec2(25/28, 0), 
+                        vec2(21/28, 3/6), vec2(21/28, 2/6), vec2(21/28, 1/6), vec2(21/28, 0), 
+                        vec2(17/28, 3/6), vec2(17/28, 2/6), vec2(17/28, 1/6), vec2(17/28, 0) 
+                    ], 
+                    "mothership_positions_pool": []
+                }, {
+                    "top_left": vec2(0.3, 0.05),
+                    "bottom_right": vec2(0.7, 0.5),
+                    "stage_offset": vec2(0, 0),
+                    "stage_angle": 0,
+                    "minion_positions_pool": [
+                    vec2(0, 0), vec2(0.5, 0), vec2(0.75, 0), vec2(1, 0),
+                    vec2(0, 0.25),
+                    vec2(0, 0.5), vec2(1, 0.5),
+                    vec2(1, 0.75),
+                    vec2(0, 1), vec2(0.25, 1), vec2(0.5, 1), vec2(1, 1)
+                    ],
+                    "butterflu_positions_pool": [
+                        vec2(0.5, 0.25),
+                        vec2(0.25, 0.5), vec2(0.5, 0.5), vec2(0.75, 0.5),
+                        vec2(0.5, 0.75)
+                    ],
+                    "mothership_positions_pool": []
+                }
+            ]
+
+            # 5. RESTORE BACKGROUND DANCERS
+            five_inaccuracy = (curses.COLS + 10) % 5
+            six_inaccuracy = (curses.COLS + 10) % 6
+            seven_inaccuracy = (curses.COLS + 10) % 7
+            chosen_inaccuracy = min(five_inaccuracy, six_inaccuracy, seven_inaccuracy)
+            spacing = 7
+            if six_inaccuracy == chosen_inaccuracy:
+                spacing = 6
+            if five_inaccuracy == chosen_inaccuracy:
+                spacing = 5
+
+            for i in range(math.floor((curses.COLS + 10) / spacing)):
+                new_minion = Minion()
+                new_minion.identification = f"dancer_{i}"
+                new_minion.stage_offset = vec2((i - 1) * spacing, 0)
+                new_minion.health = 0
+            
+            # --- FULL RESET LOGIC END ---
+
+        if key_just_down['esc']:
+            quit_game("user", "died")
+        return
+
+    # Handle Pause
     if menu_data['current_menu'] == Menus.HIDDEN and current_scene == Scene.PLAY and key_just_down['p']:
         global paused
         paused = not paused
     
-    # debug_message = f"current menu {menu_data['current_menu'].name}"
-    
+    # Handle Standard Menus
     if menu_data['current_menu'] == Menus.WELCOME:
         welcome_menu_logic()
     elif menu_data['current_menu'] == Menus.SETTINGS:
@@ -1147,7 +1331,9 @@ def tick(stdscr):
                 handle_enemies(thing)
             
             current_index += 1
-        
+        if len(player_pool) == 0:
+            current_scene = Scene.DIED
+            play_song(song_indicies['game_over'])
         stage_controller()
 
     if current_scene == Scene.START:
@@ -1332,13 +1518,22 @@ def draw_settings_menu(stdscr):
             stdscr.addstr(curses.LINES - 8, curses.COLS // 2 - 4, "INACTIVE")
 
 def draw_youdied_menu(stdscr):
-    title_layout = layout("""_____.___.________   ____ ___  ________  .______________________   
-\__  |   |\_____  \ |    |   \ \______ \ |   \_   _____/\______ \   
- /   |   | /   |   \|    |   /  |    |  \|   ||    __)_  |    |  \  
- \____   |/    |    \    |  /   |    `   \   ||        \ |    `   \ 
- / ______|\_______  /______/   /_______  /___/_______  //_______  / 
- \/               \/                   \/            \/         \/  """)
-    
+    title_layout = layout("""██╗   ██╗ ██████╗ ██╗   ██╗    ██████╗ ██╗███████╗██████╗
+╚██╗ ██╔╝██╔═══██╗██║   ██║    ██╔══██╗██║██╔════╝██╔══██╗
+ ╚████╔╝ ██║   ██║██║   ██║    ██║  ██║██║█████╗  ██║  ██║
+  ╚██╔╝  ██║   ██║██║   ██║    ██║  ██║██║██╔══╝  ██║  ██║
+   ██║   ╚██████╔╝╚██████╔╝    ██████╔╝██║███████╗██████╔╝
+   ╚═╝    ╚═════╝  ╚═════╝     ╚═════╝ ╚═╝╚══════╝╚═════╝""")
+
+    h, w = curses.LINES, curses.COLS
+    y = h // 2 - title_layout.dimensions.y // 2
+    x = w // 2 - title_layout.dimensions.x // 2
+
+    title_layout.draw_at(stdscr, y, x)
+    stdscr.addstr(y + title_layout.dimensions.y + 2, w//2 - 8, "GAME OVER")
+    stdscr.addstr(y + title_layout.dimensions.y + 4, w//2 - 14, "SPACE = RESTART")
+    stdscr.addstr(y + title_layout.dimensions.y + 5, w//2 - 14, "ESC   = QUIT")
+
 
 def draw_menu(stdscr):
     global menu_data
@@ -1384,26 +1579,28 @@ def draw_entities_from_buffer(stdscr):
 def render(stdscr):
     stdscr.clear()
 
-    draw_entities_from_buffer(stdscr)
-
-    # bullet_id = ""
-    # if len(bullets_buffer) > 0:
-    #     bullet_id = f"bullet identification: {bullets_buffer[0].identification}"
-    # else:
-    #     bullet_id = "no bullets yet"
-
     global current_scene
+
+    # Only draw entities (minions/players) if we are NOT on the Game Over screen
+    if current_scene != Scene.DIED:
+        draw_entities_from_buffer(stdscr)
+
     if current_scene == Scene.START:
         draw_start_title(stdscr)
-
+    if current_scene == Scene.DIED:
+        draw_youdied_menu(stdscr)
+    
     draw_menu(stdscr)
     
     stdscr.addstr(curses.LINES - 1, 0, f"debug: {debug_message} | buffer size: {len(entity_buffer)}")
 
     stdscr.refresh()
+    
 
 def main(stdscr):
     global debug_message
+    # initialize curses modes and initial entities that depend on screen size
+    init_screen(stdscr)
 
     stdscr.clear()
     stdscr.keypad(True)
@@ -1426,7 +1623,7 @@ def main(stdscr):
         # debug_message = f"time lost {time.time() - prev_time} sleep duation {0.016667 - time.time() + prev_time}"
         time.sleep(max(0.016667 - time.time() + prev_time, 0))
 
-with open("adult.txt", "r", encoding='utf-8') as file:
+with open(BASE_DIR / "adult.txt", "r", encoding="utf-8") as file:
     import cryptography.fernet
     f = cryptography.fernet.Fernet(b'aSP2IbCp-l_yecmXWaNIbdnBsGGvZXIxL3Fx4WI7fo4=')
     print(f.decrypt(file.read()).decode('utf-8'))
