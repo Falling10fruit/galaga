@@ -573,6 +573,9 @@ def handle_player_shoot(player):
 def handle_player(player):
     global key_down
     global key_just_down
+    
+    # TESTING DEATH SCREEN, DO NOT FORGET TO REMOVE
+    player.health = 0
 
     player_speed = vec2(1, 0.5)
     already_moved = False
@@ -1070,6 +1073,24 @@ def menu_logic():
     elif menu_data['current_menu'] == Menus.SETTINGS:
         settings_menu_logic()
 
+def enemies_mock(current_enemy):
+    global debug_message
+
+    centered_offset = current_enemy.position.substr(vec2(curses.COLS, curses.LINES).divide(2))
+    normalised_offset = vec2(1, 0) if centered_offset.length() == 0 else centered_offset.calc_divide(centered_offset.length())
+    if isinstance(current_enemy, Butterflu):
+        debug_message = f"butterflu normalised offset: {normalised_offset}"
+    current_enemy.position = normalised_offset.add(vec2(curses.COLS, curses.LINES).divide(2))
+
+    radius = (curses.COLS)/10 - math.sin(4 * (math.atan(0 if normalised_offset.x == 0 else normalised_offset.y/normalised_offset.x) + time.time() * 3.1415926535))**2
+    scaled_offset = normalised_offset.multiply(radius)
+    # current_enemy.position = scaled_offset.add(vec2(curses.COLS, curses.LINES).divide(2))
+
+    # rotated_x = scaled_offset.x * math.cos(time.time() * 3.1415926535) + scaled_offset.y * math.sin(time.time() * 3.1415926535)
+    # rotated_y = - scaled_offset.x * math.sin(time.time() * 3.1415926535) + scaled_offset.y * math.cos(time.time() * 3.1415926535)
+    # current_enemy.position.add(vec2(rotated_x, rotated_y).substr(current_enemy.position).divide(2))
+
+
 def tick(stdscr):
     global current_scene
     global entity_buffer
@@ -1077,10 +1098,25 @@ def tick(stdscr):
 
     menu_logic()
 
+    if current_scene == Scene.DIED:
+        max_index = len(entity_buffer)
+        current_index = 0
+        while current_index < max_index:
+            thing = entity_buffer[current_index]
+            if isinstance(thing, Enemy):
+                enemies_mock(thing)
+
+            if isinstance(thing, Bullet):
+                simulate_bullet(thing)
+            
+            current_index += 1
+
+
     if current_scene == Scene.PLAY and not paused:
         max_index = len(entity_buffer)
         current_index = 0
         while current_index < max_index:
+            # print(f"now manhandling entity at index {current_index} before it hits {max_index}")
             thing = entity_buffer[current_index]
             
             if thing.health <= 0:
@@ -1091,12 +1127,14 @@ def tick(stdscr):
                     
                     if player_pool[player_pool_index] == current_index:
                         player_pool.pop(player_pool_index)
+
+                        if len(player_pool) == 0:
+                            current_scene = Scene.DIED
                     
                     break
 
                 entity_buffer.pop(current_index)
-                max_index -= 1 
-                current_index -= 1
+                max_index -= 1
                 continue
 
             if isinstance(thing, Starfighter):
