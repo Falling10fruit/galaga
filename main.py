@@ -374,7 +374,7 @@ master_volume = 0.5
 MUSIC_DIR = BASE_DIR / "music"
 
 class Song:
-    audio_chunk = 2048*2048 # i cannot hear nor feel the difference. plus the documentation says that a big number leads to big performance (lower overhead)
+    audio_chunk = 2048 # i cannot hear nor feel the difference. plus the documentation says that a big number leads to big performance (lower overhead)
     chunk_index = 0
 
     def __init__(self, path, volume_weight):
@@ -588,6 +588,7 @@ class Scene(Enum):
     START = "start scene"
     PLAY = "play scene"
     DIED = "player(s) have expired"
+    WIN = "The player(S) have wons"
 current_scene = Scene.START
 
 player_pool = []
@@ -768,12 +769,12 @@ def handle_enemies(current_enemy):
                 if not player == "not collided":
                     player.health -= 3
                     current_enemy.health = 0
-            
 
 minion_spawn_delay = 0
 minion_spawn_path = PathIndex['STAGE_1_MINION_LEFT']
 butterflu_spawn_delay = 0
 butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
+
 def stage_controller():
     global debug_message
 
@@ -892,8 +893,7 @@ def stage_controller():
                 new_butterflu.attack_delay = 200
                 butterflu_spawn_delay = 8
 
-
-    if minion_pool_size == 0 and butterflu_pool_size == 0:
+    if minion_pool_size == 0 and butterflu_pool_size == 0 or True:
         enemies_alive = False
         for entity in entity_buffer:
             if isinstance(entity, Enemy) and entity.health > 0:
@@ -916,7 +916,7 @@ def stage_controller():
                     butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
             
             else:
-                current_scene = Scene.DIED
+                current_scene = Scene.WIN
                 play_song(song_indicies['you_win'])
         
 paused = False
@@ -1203,9 +1203,8 @@ def enemies_mock(current_enemy):
     centered_offset = current_enemy.stage_offset.calc_substr(vec2(curses.COLS, curses.LINES).divide(2))
     normalised_offset = vec2(1, 0) if centered_offset.length() == 0 else centered_offset.calc_divide(centered_offset.length())
 
-    if isinstance(current_enemy, Minion):
+    # if isinstance(current_enemy, Minion):
         # debug_message = f"minion raw offset {centered_offset} normalised offset {normalised_offset} position {current_enemy.position}"
-
 
 
     radius = (curses.COLS + curses.LINES)/5 - math.sin(4 * (math.atan(0 if normalised_offset.x == 0 else normalised_offset.y/normalised_offset.x) + time.time() * 3.1415926535))**2
@@ -1223,6 +1222,10 @@ def tick(stdscr):
     global player_pool
 
     menu_logic()
+
+    if current_scene == Scene.WIN:
+        if key_just_down['space']:
+            full_logic_reset_start()
 
     if current_scene == Scene.DIED:
         max_index = len(entity_buffer)
@@ -1464,17 +1467,16 @@ def draw_youdied_menu(stdscr):
  ╚████╔╝ ██║   ██║██║   ██║    ██║  ██║██║█████╗  ██║  ██║
   ╚██╔╝  ██║   ██║██║   ██║    ██║  ██║██║██╔══╝  ██║  ██║
    ██║   ╚██████╔╝╚██████╔╝    ██████╔╝██║███████╗██████╔╝
-   ╚═╝    ╚═════╝  ╚═════╝     ╚═════╝ ╚═╝╚══════╝╚═════╝""")
+   ╚═╝    ╚═════╝  ╚═════╝     ╚═════╝ ╚═╝╚══════╝╚═════╝
+                        GAME OVER
+                     SPACE = RESTART
+                     ESC   = QUIT""")
 
     h, w = curses.LINES, curses.COLS
     y = h // 2 - title_layout.dimensions.y // 2
     x = w // 2 - title_layout.dimensions.x // 2
 
     title_layout.draw_at(stdscr, y, x)
-    stdscr.addstr(y + title_layout.dimensions.y + 2, w//2 - 8, "GAME OVER")
-    stdscr.addstr(y + title_layout.dimensions.y + 4, w//2 - 14, "SPACE = RESTART")
-    stdscr.addstr(y + title_layout.dimensions.y + 5, w//2 - 14, "ESC   = QUIT")
-
 
 def draw_menu(stdscr):
     global menu_data
@@ -1485,22 +1487,6 @@ def draw_menu(stdscr):
 
     if menu_data['current_menu'] == Menus.SETTINGS:
         draw_settings_menu(stdscr)
-
-{
-    # def draw_gameplay_hud(stdscr):
-    #     global player
-
-    #     stdscr.addstr(curses.LINES - 3, curses.COLS - 45, "REMAINING HEALTH:")
-
-    #     if time.time()*20%10 < 5 or player.health > 3:
-    #         ascii_art = """ _ _ _ _ _ _ _ _ _ _ _
-    # /"""
-    # # /_/_/_/_/_/_/_/_/_ _ _ /"""
-    #         ascii_art += "_/" * player.health + "_ " *  min(10 - player.health, 10) + "_/"
-    #         health_hud_layout = layout(ascii_art)
-    #         # print(ascii_art)
-    #         health_hud_layout.draw_at(stdscr, curses.LINES - 4, curses.COLS - 26)
-}
 
 def draw_entities_from_buffer(stdscr):
     for entity in entity_buffer:
@@ -1517,6 +1503,16 @@ def draw_entities_from_buffer(stdscr):
         if health_between_height_bounds and health_between_width_bounds:
             stdscr.addstr(round(top_left_y) + entity.layout.dimensions.y, round(entity.position.x - entity.health / 2), "." * entity.health)
 
+with open(BASE_DIR / "win_credits.txt", "r", encoding="utf-8") as file:
+    win_text = file.read()
+win_layout = layout(win_text)
+def draw_win_title(stdscr):
+    global win_layout
+    top_left = vec2(curses.COLS, curses.LINES).substr(win_layout.dimensions).divide(2).to_int()
+    win_layout.draw_at(stdscr, top_left.y, top_left.x)
+
+    win_layout.layer_visibility[-1] = (round(time.time())%2 == 0)
+
 def render(stdscr):
     stdscr.clear()
 
@@ -1530,6 +1526,8 @@ def render(stdscr):
         draw_start_title(stdscr)
     if current_scene == Scene.DIED:
         draw_youdied_menu(stdscr)
+    if current_scene == Scene.WIN:
+        draw_win_title(stdscr)
     
     draw_menu(stdscr)
     

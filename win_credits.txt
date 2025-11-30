@@ -6,21 +6,19 @@ ____    ____  ______    __    __     ____    __    ____  __  .__   __.  __
     |__|     \______/   \______/         \__/  \__/     |__| |__| \__| (__)
                                             I'm galling the ga
                                     
-                                DESIGN
-
-                    Stages 3 made by Yapheth Stephan Nathaniel
+                                  DESIGN
                     
-                    Music chosen by [OUTSOURCED]
-                    Art provided by [OUTSOURCED]
-                    Stages 1 2 made by [OUTSOURCED]
+                    Losing art provided by Yapheth Stephan Nathaniel
 
-                             Programming
+                    The rest by [OUTSOURCED]
 
-                    Enemy behavior by [OUTSOURCED]
-                    Menu system by [OUTSOURCED]
-                    Tested by [OUTSOURCED]
-                    Stage behaviors by [OUTSOURCED]
-                    Welcome screen animated by [OUTSOURCED]
-                    Credits screen by [OUTSOURCED]
+                               Programming
 
-                        THANK YOU FOR PLAYING
+                    Losing logic made by Yapheth Stephan Nathaniel
+                    Reset logic made by Yapheth Stephan Nathaniel
+                    Stages 3 logic made by Yapheth Stephan Nathaniel
+
+                    The rest by [OUTSOURCED]
+
+                          THANK YOU FOR PLAYING
+                      PRESS SPACE TO RETURN TO START
