@@ -1,3 +1,4 @@
+import curses
 import pynput
 import curses
 import pyaudio
@@ -225,61 +226,66 @@ PathIndex = {
 }
 
 stage_start_time = 0
-level_stages = [
-    {
-        "top_left": vec2(0.25, 0.15), # clipspace
-        "bottom_right": vec2(0.75, 0.45), # clipspace
-        "stage_offset": vec2(0, 0), # actual coordinates
-        "stage_angle": 0, # from the center, in degrees
-        "minion_positions_pool": [ # relative to stage
-            vec2(0, 0.5), vec2(0.125, 0.5), vec2(0.25, 0.5), vec2(0.375, 0.5), vec2(0.5, 0.5), vec2(0.625, 0.5), vec2(0.75, 0.5), vec2(0.875, 0.5), vec2(1, 0.5),
-            vec2(0, 1), vec2(0.125, 1), vec2(0.25, 1), vec2(0.375, 1), vec2(0.5, 1), vec2(0.625, 1), vec2(0.75, 1), vec2(0.875, 1), vec2(1, 1),
-        ],
-        "butterflu_positions_pool": [
-            vec2(0.2, 0), vec2(0.4, 0), vec2(0.6, 0), vec2(0.8, 0)
-        ], 
-        "mothership_positions_pool": []
-    }, {
-        "top_left": vec2(0.05, 0.05),
-        "bottom_right": vec2(0.95, 0.6),
-        "stage_offset": vec2(0, 0),
-        "stage_angle": 0,
-        "minion_positions_pool": [
-            vec2(0, 1), vec2(1/7, 1), vec2(2/7, 1), vec2(3/7, 1), vec2(4/7, 1), vec2(5/7, 1), vec2(6/7, 1), vec2(1, 1),
+level_stages = []
+def set_level_stages():
+    global level_stages
 
-            vec2(1/14, 5/6), vec2(3/14, 5/6), vec2(5/14, 5/6), vec2(7/14, 5/6), vec2(9/14, 5/6), vec2(11/14, 5/6), vec2(13/14, 5/6),
+    level_stages = [
+        {
+            "top_left": vec2(0.25, 0.15), # clipspace
+            "bottom_right": vec2(0.75, 0.45), # clipspace
+            "stage_offset": vec2(0, 0), # actual coordinates
+            "stage_angle": 0, # from the center, in degrees
+            "minion_positions_pool": [ # relative to stage
+                vec2(0, 0.5), vec2(0.125, 0.5), vec2(0.25, 0.5), vec2(0.375, 0.5), vec2(0.5, 0.5), vec2(0.625, 0.5), vec2(0.75, 0.5), vec2(0.875, 0.5), vec2(1, 0.5),
+                vec2(0, 1), vec2(0.125, 1), vec2(0.25, 1), vec2(0.375, 1), vec2(0.5, 1), vec2(0.625, 1), vec2(0.75, 1), vec2(0.875, 1), vec2(1, 1),
+            ],
+            "butterflu_positions_pool": [
+                vec2(0.2, 0), vec2(0.4, 0), vec2(0.6, 0), vec2(0.8, 0)
+            ], 
+            "mothership_positions_pool": []
+        }, {
+            "top_left": vec2(0.05, 0.05),
+            "bottom_right": vec2(0.95, 0.6),
+            "stage_offset": vec2(0, 0),
+            "stage_angle": 0,
+            "minion_positions_pool": [
+                vec2(0, 1), vec2(1/7, 1), vec2(2/7, 1), vec2(3/7, 1), vec2(4/7, 1), vec2(5/7, 1), vec2(6/7, 1), vec2(1, 1),
 
-            vec2(0, 4/6), vec2(1/14, 4/6), vec2(2/14, 4/6), vec2(3/14, 4/6), vec2(4/14, 4/6), vec2(5/14, 4/6), vec2(6/14, 4/6), vec2(7/14, 4/6), vec2(8/14, 4/6), vec2(9/14, 4/6), vec2(10/14, 4/6), vec2(11/14, 4/6), vec2(12/14, 4/6), vec2(13/14, 4/6), vec2(1, 4/6),
-        ],
-        "butterflu_positions_pool": [
-            vec2(3/28,  3/6), vec2(3/28,  2/6), vec2(3/28,  1/6), vec2(3/28,  0),
-            vec2(7/28,  3/6), vec2(7/28,  2/6), vec2(7/28,  1/6), vec2(7/28,  0), 
-            vec2(11/28, 3/6), vec2(11/28, 2/6), vec2(11/28, 1/6), vec2(11/28, 0), 
-            vec2(25/28, 3/6), vec2(25/28, 2/6), vec2(25/28, 1/6), vec2(25/28, 0), 
-            vec2(21/28, 3/6), vec2(21/28, 2/6), vec2(21/28, 1/6), vec2(21/28, 0), 
-            vec2(17/28, 3/6), vec2(17/28, 2/6), vec2(17/28, 1/6), vec2(17/28, 0) 
-        ], 
-        "mothership_positions_pool": []
-    }, {
-        "top_left": vec2(0.3, 0.05),
-        "bottom_right": vec2(0.7, 0.5),
-        "stage_offset": vec2(0, 0),
-        "stage_angle": 0,
-        "minion_positions_pool": [
-          vec2(0, 0), vec2(0.5, 0), vec2(0.75, 0), vec2(1, 0),
-          vec2(0, 0.25),
-          vec2(0, 0.5), vec2(1, 0.5),
-          vec2(1, 0.75),
-          vec2(0, 1), vec2(0.25, 1), vec2(0.5, 1), vec2(1, 1)
-        ],
-        "butterflu_positions_pool": [
-            vec2(0.5, 0.25),
-            vec2(0.25, 0.5), vec2(0.5, 0.5), vec2(0.75, 0.5),
-            vec2(0.5, 0.75)
-        ],
-        "mothership_positions_pool": []
-    }
-]
+                vec2(1/14, 5/6), vec2(3/14, 5/6), vec2(5/14, 5/6), vec2(7/14, 5/6), vec2(9/14, 5/6), vec2(11/14, 5/6), vec2(13/14, 5/6),
+
+                vec2(0, 4/6), vec2(1/14, 4/6), vec2(2/14, 4/6), vec2(3/14, 4/6), vec2(4/14, 4/6), vec2(5/14, 4/6), vec2(6/14, 4/6), vec2(7/14, 4/6), vec2(8/14, 4/6), vec2(9/14, 4/6), vec2(10/14, 4/6), vec2(11/14, 4/6), vec2(12/14, 4/6), vec2(13/14, 4/6), vec2(1, 4/6),
+            ],
+            "butterflu_positions_pool": [
+                vec2(3/28,  3/6), vec2(3/28,  2/6), vec2(3/28,  1/6), vec2(3/28,  0),
+                vec2(7/28,  3/6), vec2(7/28,  2/6), vec2(7/28,  1/6), vec2(7/28,  0), 
+                vec2(11/28, 3/6), vec2(11/28, 2/6), vec2(11/28, 1/6), vec2(11/28, 0), 
+                vec2(25/28, 3/6), vec2(25/28, 2/6), vec2(25/28, 1/6), vec2(25/28, 0), 
+                vec2(21/28, 3/6), vec2(21/28, 2/6), vec2(21/28, 1/6), vec2(21/28, 0), 
+                vec2(17/28, 3/6), vec2(17/28, 2/6), vec2(17/28, 1/6), vec2(17/28, 0) 
+            ], 
+            "mothership_positions_pool": []
+        }, {
+            "top_left": vec2(0.3, 0.05),
+            "bottom_right": vec2(0.7, 0.5),
+            "stage_offset": vec2(0, 0),
+            "stage_angle": 0,
+            "minion_positions_pool": [
+            vec2(0, 0), vec2(0.5, 0), vec2(0.75, 0), vec2(1, 0),
+            vec2(0, 0.25),
+            vec2(0, 0.5), vec2(1, 0.5),
+            vec2(1, 0.75),
+            vec2(0, 1), vec2(0.25, 1), vec2(0.5, 1), vec2(1, 1)
+            ],
+            "butterflu_positions_pool": [
+                vec2(0.5, 0.25),
+                vec2(0.25, 0.5), vec2(0.5, 0.5), vec2(0.75, 0.5),
+                vec2(0.5, 0.75)
+            ],
+            "mothership_positions_pool": []
+        }
+    ]
+set_level_stages()
 current_level_stage = 0
 
 class Enemy(Entity):
@@ -601,7 +607,7 @@ def handle_player(player):
     global key_just_down
     
     # TESTING DEATH SCREEN, DO NOT FORGET TO REMOVE
-    player.health = 0
+    #  player.health = 0
 
     player_speed = vec2(1, 0.5)
     already_moved = False
@@ -609,6 +615,8 @@ def handle_player(player):
     global debug_message
     
     player.recoil = max(player.recoil - 1, 0)
+
+    # debug_message = f"{player.position}"
 
     if not player.player_control == 1:
         if key_down[key_bindings['player_1_right']]:
@@ -630,7 +638,6 @@ def handle_player(player):
             handle_player_shoot(player)
 
     player.position.add(player.target_position.calc_substr(player.position))
-    # debug_message = f"{player.position}"
 
 def simulate_bullet(bullet):
     global entity_buffer
@@ -644,7 +651,7 @@ def simulate_bullet(bullet):
             continue
         if not enemy_is_player and bullet.identification != "b214":
             continue
-        if enemy.identification == bullet.identification: # we can't use pointing up because it's not guaranteed to be a property
+        if enemy.identification == bullet.identification:
             continue
 
         if bullet.is_colliding(enemy) and not enemy.bulletproof:
@@ -661,10 +668,6 @@ def simulate_bullet(bullet):
         bullet.position.y -= 1
     else:
         bullet.position.y += 1
-
-# monster = Minion(curses.COLS // 2 - 1, 10)
-# monster.identification = "m0n3r"
-# These guys are just dancers
 
 def handle_enemies(current_enemy):
     global debug_message
@@ -791,10 +794,8 @@ def stage_controller():
     current_stage = level_stages[current_level_stage]
     minion_pool_size = len(current_stage['minion_positions_pool'])
     butterflu_pool_size = len(current_stage['butterflu_positions_pool'])
+    mothership_pool_size = len(current_stage['mothership_positions_pool'])
 
-    # --- SPAWNING LOGIC ---
-    
-    # STAGE 0 SPAWN LOGIC
     if current_level_stage == 0:
         if minion_pool_size > 0:
             if minion_spawn_delay > 0:
@@ -828,7 +829,6 @@ def stage_controller():
         # Animate the stage background offset
         current_stage['stage_offset'] = vec2(math.sin(time.time())*4, math.sin(time.time()*2))
     
-    # STAGE 1 SPAWN LOGIC
     elif current_level_stage == 1:
         if minion_pool_size > 0:
             if minion_spawn_delay > 0:
@@ -864,7 +864,6 @@ def stage_controller():
                 else:
                     butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
 
-    # STAGE 2 SPAWN LOGIC (Enabled)
     elif current_level_stage == 2:
         if minion_pool_size > 0:
             if minion_spawn_delay > 0:
@@ -874,10 +873,9 @@ def stage_controller():
                 new_minion.path_index = minion_spawn_path
                 new_minion.stage_offset = current_stage['minion_positions_pool'].pop(random.randint(0, minion_pool_size - 1))
                 new_minion.stage_index = 2
-                new_minion.attack_delay = 120 # Faster attacks in stage 2
+                new_minion.attack_delay = 120
                 minion_spawn_delay = 6
 
-                # Alternate paths
                 if minion_spawn_path == PathIndex['STAGE_1_MINION_LEFT']:
                     minion_spawn_path = PathIndex['STAGE_1_MINION_RIGHT']
                 else:
@@ -895,30 +893,21 @@ def stage_controller():
                 butterflu_spawn_delay = 8
 
 
-    # --- TRANSITION LOGIC (Next Stage) ---
-    
-    # 1. Check if we have exhausted the spawn pools for the current stage
     if minion_pool_size == 0 and butterflu_pool_size == 0:
-        
-        # 2. Check if there are any enemies alive in the buffer
         enemies_alive = False
         for entity in entity_buffer:
             if isinstance(entity, Enemy) and entity.health > 0:
                 enemies_alive = True
                 break
-        
-        # 3. If no enemies are left, advance the stage
+
         if not enemies_alive:
-            # Check if there is a next stage available
             if current_level_stage < len(level_stages) - 1:
                 current_level_stage += 1
                 stage_start_time = time.time()
                 
-                # Reset spawn timers
                 minion_spawn_delay = 10
                 butterflu_spawn_delay = 10
                 
-                # Set specific paths based on the new stage
                 if current_level_stage == 1:
                     minion_spawn_path = PathIndex['STAGE_2_MINION_RIGHT']
                     butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
@@ -927,11 +916,9 @@ def stage_controller():
                     butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
             
             else:
-                # YOU WIN (Ran out of stages)
-                # For now, we reuse the Game Over scene but play the victory song
                 current_scene = Scene.DIED
                 play_song(song_indicies['you_win'])
-
+        
 paused = False
 
 class Menus(Enum):
@@ -1042,6 +1029,7 @@ def welcome_menu_logic():
             player = Starfighter()
             player.target_position = vec2(curses.COLS // 2 - 1, curses.LINES - 8)
             player.identification = "single"
+            player.player_control = 0
             player.layout.set_visibility(True)
             player.bulletproof = ko_wilbert_mode
         
@@ -1057,6 +1045,7 @@ def welcome_menu_logic():
             two_player_1 = Starfighter()
             two_player_1.target_position = vec2(curses.COLS // 2 + 7, curses.LINES - 8)
             two_player_1.identification = "double_1"
+            two_player_1.player_control = -1
             two_player_1.layout.set_visibility(True)
             two_player_1.bulletproof = ko_wilbert_mode
             
@@ -1064,6 +1053,7 @@ def welcome_menu_logic():
             two_player_2 = Starfighter()
             two_player_2.target_position = vec2(curses.COLS // 2 - 7, curses.LINES - 8)
             two_player_2.identification = "double_2"
+            two_player_2.player_control = 1
             two_player_2.layout.set_visibility(True)
             two_player_2.bulletproof = ko_wilbert_mode
         
@@ -1130,6 +1120,53 @@ def settings_menu_logic():
         elif selected_setting == SettingsSelection.VOLUME:
             selected_setting = SettingsSelection.NONE
 
+def full_logic_reset_start():
+    global menu_data
+    global debug_message
+    global current_scene
+    global entity_buffer
+    global player_pool
+    global stage_start_time
+    global level_stages
+    global current_level_stage
+    global minion_spawn_delay, butterflu_spawn_delay
+    global minion_spawn_path, butterflu_spawn_path
+
+    entity_buffer.clear()
+    player_pool.clear()
+    
+    menu_data['current_menu'] = Menus.WELCOME
+    menu_data['selected_option'] = 0
+    current_scene = Scene.START
+    play_song(song_indicies['welcome'])
+
+    current_level_stage = 0
+    minion_spawn_delay = 0
+    butterflu_spawn_delay = 0
+    minion_spawn_path = PathIndex['STAGE_1_MINION_LEFT']
+    butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
+
+    set_level_stages()
+
+    five_inaccuracy = (curses.COLS + 10) % 5
+    six_inaccuracy = (curses.COLS + 10) % 6
+    seven_inaccuracy = (curses.COLS + 10) % 7
+    chosen_inaccuracy = min(five_inaccuracy, six_inaccuracy, seven_inaccuracy)
+    spacing = 7
+    if six_inaccuracy == chosen_inaccuracy:
+        spacing = 6
+    if five_inaccuracy == chosen_inaccuracy:
+        spacing = 5
+
+    for i in range(math.floor((curses.COLS + 10) / spacing)):
+        new_minion = Minion()
+        new_minion.identification = f"dancer_{i}"
+        new_minion.stage_offset = vec2((i - 1) * spacing, 0)
+        new_minion.health = 0
+
+    for song in song_list:
+        song.file.seek(0)
+
 def menu_logic():
     global menu_data
     global debug_message
@@ -1139,119 +1176,17 @@ def menu_logic():
     global player_pool
     global stage_start_time
 
-    # GLOBAL VARIABLES NEEDED FOR RESET
-    global level_stages
-    global current_level_stage
-    global minion_spawn_delay, butterflu_spawn_delay
-    global minion_spawn_path, butterflu_spawn_path
-
-    # 1. Handle Game Over Input (High Priority)
     if current_scene == Scene.DIED:
         if key_just_down['space']:
-            # --- FULL RESET LOGIC START ---
-            
-            # 1. Clear Entities
-            entity_buffer.clear()
-            player_pool.clear()
-            
-            # 2. Reset Menu State
-            menu_data['current_menu'] = Menus.WELCOME
-            menu_data['selected_option'] = 0
-            current_scene = Scene.START
-            play_song(song_indicies['welcome'])
-
-            # 3. RESET STAGE VARIABLES (This fixes the "nothing loads" bug)
-            current_level_stage = 0
-            minion_spawn_delay = 0
-            butterflu_spawn_delay = 0
-            minion_spawn_path = PathIndex['STAGE_1_MINION_LEFT']
-            butterflu_spawn_path = PathIndex['STAGE_2_BUTTERFLU_LEFT']
-
-            # 4. REFILL ENEMY POSITION POOLS 
-            # (We have to redefine this because .pop() emptied it in the previous game)
-            level_stages = [
-                {
-                    "top_left": vec2(0.25, 0.15), 
-                    "bottom_right": vec2(0.75, 0.45), 
-                    "stage_offset": vec2(0, 0), 
-                    "stage_angle": 0, 
-                    "minion_positions_pool": [ 
-                        vec2(0, 0.5), vec2(0.125, 0.5), vec2(0.25, 0.5), vec2(0.375, 0.5), vec2(0.5, 0.5), vec2(0.625, 0.5), vec2(0.75, 0.5), vec2(0.875, 0.5), vec2(1, 0.5),
-                        vec2(0, 1), vec2(0.125, 1), vec2(0.25, 1), vec2(0.375, 1), vec2(0.5, 1), vec2(0.625, 1), vec2(0.75, 1), vec2(0.875, 1), vec2(1, 1),
-                    ],
-                    "butterflu_positions_pool": [
-                        vec2(0.2, 0), vec2(0.4, 0), vec2(0.6, 0), vec2(0.8, 0)
-                    ], 
-                    "mothership_positions_pool": []
-                }, {
-                    "top_left": vec2(0.05, 0.05),
-                    "bottom_right": vec2(0.95, 0.6),
-                    "stage_offset": vec2(0, 0),
-                    "stage_angle": 0,
-                    "minion_positions_pool": [
-                        vec2(0, 1), vec2(1/7, 1), vec2(2/7, 1), vec2(3/7, 1), vec2(4/7, 1), vec2(5/7, 1), vec2(6/7, 1), vec2(1, 1),
-                        vec2(1/14, 5/6), vec2(3/14, 5/6), vec2(5/14, 5/6), vec2(7/14, 5/6), vec2(9/14, 5/6), vec2(11/14, 5/6), vec2(13/14, 5/6),
-                        vec2(0, 4/6), vec2(1/14, 4/6), vec2(2/14, 4/6), vec2(3/14, 4/6), vec2(4/14, 4/6), vec2(5/14, 4/6), vec2(6/14, 4/6), vec2(7/14, 4/6), vec2(8/14, 4/6), vec2(9/14, 4/6), vec2(10/14, 4/6), vec2(11/14, 4/6), vec2(12/14, 4/6), vec2(13/14, 4/6), vec2(1, 4/6),
-                    ],
-                    "butterflu_positions_pool": [
-                        vec2(3/28,  3/6), vec2(3/28,  2/6), vec2(3/28,  1/6), vec2(3/28,  0),
-                        vec2(7/28,  3/6), vec2(7/28,  2/6), vec2(7/28,  1/6), vec2(7/28,  0), 
-                        vec2(11/28, 3/6), vec2(11/28, 2/6), vec2(11/28, 1/6), vec2(11/28, 0), 
-                        vec2(25/28, 3/6), vec2(25/28, 2/6), vec2(25/28, 1/6), vec2(25/28, 0), 
-                        vec2(21/28, 3/6), vec2(21/28, 2/6), vec2(21/28, 1/6), vec2(21/28, 0), 
-                        vec2(17/28, 3/6), vec2(17/28, 2/6), vec2(17/28, 1/6), vec2(17/28, 0) 
-                    ], 
-                    "mothership_positions_pool": []
-                }, {
-                    "top_left": vec2(0.3, 0.05),
-                    "bottom_right": vec2(0.7, 0.5),
-                    "stage_offset": vec2(0, 0),
-                    "stage_angle": 0,
-                    "minion_positions_pool": [
-                    vec2(0, 0), vec2(0.5, 0), vec2(0.75, 0), vec2(1, 0),
-                    vec2(0, 0.25),
-                    vec2(0, 0.5), vec2(1, 0.5),
-                    vec2(1, 0.75),
-                    vec2(0, 1), vec2(0.25, 1), vec2(0.5, 1), vec2(1, 1)
-                    ],
-                    "butterflu_positions_pool": [
-                        vec2(0.5, 0.25),
-                        vec2(0.25, 0.5), vec2(0.5, 0.5), vec2(0.75, 0.5),
-                        vec2(0.5, 0.75)
-                    ],
-                    "mothership_positions_pool": []
-                }
-            ]
-
-            # 5. RESTORE BACKGROUND DANCERS
-            five_inaccuracy = (curses.COLS + 10) % 5
-            six_inaccuracy = (curses.COLS + 10) % 6
-            seven_inaccuracy = (curses.COLS + 10) % 7
-            chosen_inaccuracy = min(five_inaccuracy, six_inaccuracy, seven_inaccuracy)
-            spacing = 7
-            if six_inaccuracy == chosen_inaccuracy:
-                spacing = 6
-            if five_inaccuracy == chosen_inaccuracy:
-                spacing = 5
-
-            for i in range(math.floor((curses.COLS + 10) / spacing)):
-                new_minion = Minion()
-                new_minion.identification = f"dancer_{i}"
-                new_minion.stage_offset = vec2((i - 1) * spacing, 0)
-                new_minion.health = 0
-            
-            # --- FULL RESET LOGIC END ---
-
+            full_logic_reset_start()
         if key_just_down['esc']:
             quit_game("user", "died")
         return
 
-    # Handle Pause
     if menu_data['current_menu'] == Menus.HIDDEN and current_scene == Scene.PLAY and key_just_down['p']:
         global paused
         paused = not paused
     
-    # Handle Standard Menus
     if menu_data['current_menu'] == Menus.WELCOME:
         welcome_menu_logic()
     elif menu_data['current_menu'] == Menus.SETTINGS:
@@ -1259,21 +1194,28 @@ def menu_logic():
 
 def enemies_mock(current_enemy):
     global debug_message
+    
+    if current_enemy.stage_index > -1:
+        current_enemy.stage_offset = current_enemy.position
+        current_enemy.stage_index = -1
+        return
 
-    centered_offset = current_enemy.position.substr(vec2(curses.COLS, curses.LINES).divide(2))
+    centered_offset = current_enemy.stage_offset.calc_substr(vec2(curses.COLS, curses.LINES).divide(2))
     normalised_offset = vec2(1, 0) if centered_offset.length() == 0 else centered_offset.calc_divide(centered_offset.length())
-    if isinstance(current_enemy, Butterflu):
-        debug_message = f"butterflu normalised offset: {normalised_offset}"
-    current_enemy.position = normalised_offset.add(vec2(curses.COLS, curses.LINES).divide(2))
 
-    radius = (curses.COLS)/10 - math.sin(4 * (math.atan(0 if normalised_offset.x == 0 else normalised_offset.y/normalised_offset.x) + time.time() * 3.1415926535))**2
+    if isinstance(current_enemy, Minion):
+        # debug_message = f"minion raw offset {centered_offset} normalised offset {normalised_offset} position {current_enemy.position}"
+
+
+
+    radius = (curses.COLS + curses.LINES)/5 - math.sin(4 * (math.atan(0 if normalised_offset.x == 0 else normalised_offset.y/normalised_offset.x) + time.time() * 3.1415926535))**2
     scaled_offset = normalised_offset.multiply(radius)
-    # current_enemy.position = scaled_offset.add(vec2(curses.COLS, curses.LINES).divide(2))
 
-    # rotated_x = scaled_offset.x * math.cos(time.time() * 3.1415926535) + scaled_offset.y * math.sin(time.time() * 3.1415926535)
-    # rotated_y = - scaled_offset.x * math.sin(time.time() * 3.1415926535) + scaled_offset.y * math.cos(time.time() * 3.1415926535)
-    # current_enemy.position.add(vec2(rotated_x, rotated_y).substr(current_enemy.position).divide(2))
-
+    rotated_x = scaled_offset.x * math.cos(time.time() * 3.1415926535) + scaled_offset.y * math.sin(time.time() * 3.1415926535)
+    rotated_y = - scaled_offset.x * math.sin(time.time() * 3.1415926535) + scaled_offset.y * math.cos(time.time() * 3.1415926535)
+    
+    target_position = vec2(rotated_x, rotated_y).multiply(vec2(1, 0.5)).calc_add(vec2(curses.COLS, curses.LINES).divide(2))
+    current_enemy.position.add(target_position.substr(current_enemy.position).divide(3))
 
 def tick(stdscr):
     global current_scene
@@ -1314,6 +1256,7 @@ def tick(stdscr):
 
                         if len(player_pool) == 0:
                             current_scene = Scene.DIED
+                            play_song(song_indicies['game_over'])
                     
                     break
 
@@ -1331,9 +1274,7 @@ def tick(stdscr):
                 handle_enemies(thing)
             
             current_index += 1
-        if len(player_pool) == 0:
-            current_scene = Scene.DIED
-            play_song(song_indicies['game_over'])
+            
         stage_controller()
 
     if current_scene == Scene.START:
@@ -1582,8 +1523,8 @@ def render(stdscr):
     global current_scene
 
     # Only draw entities (minions/players) if we are NOT on the Game Over screen
-    if current_scene != Scene.DIED:
-        draw_entities_from_buffer(stdscr)
+    # i was in the middle of making them dance when you lose yapet
+    draw_entities_from_buffer(stdscr)
 
     if current_scene == Scene.START:
         draw_start_title(stdscr)
@@ -1605,10 +1546,6 @@ def main(stdscr):
     stdscr.clear()
     stdscr.keypad(True)
     stdscr.nodelay(True)
-
-    stdscr.addstr("wdwd")
-
-    stdscr.getch()
 
     while True:
         prev_time = time.time()
