@@ -893,7 +893,7 @@ def stage_controller():
                 new_butterflu.attack_delay = 200
                 butterflu_spawn_delay = 8
 
-    if minion_pool_size == 0 and butterflu_pool_size == 0 or True:
+    if minion_pool_size == 0 and butterflu_pool_size == 0:
         enemies_alive = False
         for entity in entity_buffer:
             if isinstance(entity, Enemy) and entity.health > 0:
